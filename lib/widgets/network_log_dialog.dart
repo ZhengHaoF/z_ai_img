@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/network_log.dart';
@@ -12,6 +13,66 @@ class NetworkLogDialog extends ConsumerStatefulWidget {
 
 class _NetworkLogDialogState extends ConsumerState<NetworkLogDialog> {
   NetworkLogType? _filterType;
+  bool _testing = false;
+
+  Future<void> _testNetwork() async {
+    if (_testing) return;
+    setState(() => _testing = true);
+
+    const url = 'https://www.baidu.com';
+    final requestId = url;
+    final startTime = DateTime.now();
+
+    ref.read(networkLogProvider.notifier).addLog(
+      NetworkLog(
+        id: requestId,
+        type: NetworkLogType.request,
+        timestamp: DateTime.now(),
+        method: 'GET',
+        url: url,
+      ),
+    );
+
+    try {
+      final dio = Dio();
+      final response = await dio.get(
+        url,
+        options: Options(
+          responseType: ResponseType.bytes,
+        ),
+      );
+      final duration = DateTime.now().difference(startTime);
+      ref.read(networkLogProvider.notifier).addLog(
+        NetworkLog(
+          id: requestId,
+          type: NetworkLogType.response,
+          timestamp: DateTime.now(),
+          method: 'GET',
+          url: url,
+          statusCode: response.statusCode,
+          data: '响应长度: ${response.data?.length ?? 0} bytes',
+          duration: duration,
+        ),
+      );
+    } catch (e) {
+      final duration = DateTime.now().difference(startTime);
+      ref.read(networkLogProvider.notifier).addLog(
+        NetworkLog(
+          id: requestId,
+          type: NetworkLogType.error,
+          timestamp: DateTime.now(),
+          method: 'GET',
+          url: url,
+          errorMessage: e.toString(),
+          duration: duration,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _testing = false);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -21,40 +82,57 @@ class _NetworkLogDialogState extends ConsumerState<NetworkLogDialog> {
         : logs.where((log) => log.type == _filterType).toList();
 
     return AlertDialog(
-      title: Row(
+      title: Wrap(
+        alignment: WrapAlignment.spaceBetween,
+        crossAxisAlignment: WrapCrossAlignment.center,
         children: [
           const Text('网络请求日志'),
-          const Spacer(),
-          PopupMenuButton<NetworkLogType?>(
-            icon: const Icon(Icons.filter_list),
-            onSelected: (value) {
-              setState(() => _filterType = value);
-            },
-            itemBuilder: (context) => [
-              const PopupMenuItem(
-                value: null,
-                child: Text('全部'),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconButton(
+                icon: _testing
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.network_check),
+                onPressed: _testing ? null : _testNetwork,
+                tooltip: '测试网络',
               ),
-              const PopupMenuItem(
-                value: NetworkLogType.request,
-                child: Text('请求'),
+              PopupMenuButton<NetworkLogType?>(
+                icon: const Icon(Icons.filter_list),
+                onSelected: (value) {
+                  setState(() => _filterType = value);
+                },
+                itemBuilder: (context) => [
+                  const PopupMenuItem(
+                    value: null,
+                    child: Text('全部'),
+                  ),
+                  const PopupMenuItem(
+                    value: NetworkLogType.request,
+                    child: Text('请求'),
+                  ),
+                  const PopupMenuItem(
+                    value: NetworkLogType.response,
+                    child: Text('响应'),
+                  ),
+                  const PopupMenuItem(
+                    value: NetworkLogType.error,
+                    child: Text('错误'),
+                  ),
+                ],
               ),
-              const PopupMenuItem(
-                value: NetworkLogType.response,
-                child: Text('响应'),
-              ),
-              const PopupMenuItem(
-                value: NetworkLogType.error,
-                child: Text('错误'),
+              IconButton(
+                icon: const Icon(Icons.delete_outline),
+                onPressed: () {
+                  ref.read(networkLogProvider.notifier).clearLogs();
+                },
+                tooltip: '清空日志',
               ),
             ],
-          ),
-          IconButton(
-            icon: const Icon(Icons.delete_outline),
-            onPressed: () {
-              ref.read(networkLogProvider.notifier).clearLogs();
-            },
-            tooltip: '清空日志',
           ),
         ],
       ),
@@ -105,6 +183,18 @@ class _LogTileState extends State<_LogTile> {
     }
   }
 
+  String _truncateData(dynamic data) {
+    try {
+      final str = data.toString();
+      if (str.length > 50) {
+        return '${str.substring(0, 50)}...';
+      }
+      return str;
+    } catch (e) {
+      return '[数据]';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final log = widget.log;
@@ -116,7 +206,7 @@ class _LogTileState extends State<_LogTile> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
             decoration: BoxDecoration(
-              color: _typeColor.withOpacity(0.1),
+              color: _typeColor.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(4),
             ),
             child: Text(
@@ -174,7 +264,7 @@ class _LogTileState extends State<_LogTile> {
           width: double.infinity,
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: Colors.grey.withOpacity(0.05),
+            color: Colors.grey.withValues(alpha: 0.05),
             borderRadius: BorderRadius.circular(4),
           ),
           child: Column(

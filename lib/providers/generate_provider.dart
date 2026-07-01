@@ -5,6 +5,7 @@ import '../models/generate/generate_request.dart';
 import '../models/image_result.dart';
 import '../providers/settings_provider.dart';
 import '../repositories/image_repository.dart';
+import '../utils/notification_service.dart' show showNotification;
 
 // Generate state
 enum GenerateStatus { idle, loading, success, error, partial }
@@ -141,6 +142,12 @@ class GenerateNotifier extends StateNotifier<GenerateState> {
       state = state.copyWith(
         status: GenerateStatus.success,
         images: results,
+      );
+
+      // 发送通知
+      showNotification(
+        '🎨 图片生成完成',
+        '已生成 ${results.length} 张图片，点击查看',
       );
     } on DioException catch (e) {
       if (e.type == DioExceptionType.cancel) {

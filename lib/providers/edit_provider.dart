@@ -6,6 +6,7 @@ import '../models/edit/edit_request.dart';
 import '../models/image_result.dart';
 import '../providers/settings_provider.dart';
 import '../repositories/image_repository.dart';
+import '../utils/notification_service.dart' show showNotification;
 
 // Edit state
 enum EditStatus { idle, loading, uploading, success, error }
@@ -200,6 +201,12 @@ class EditNotifier extends StateNotifier<EditState> {
       state = state.copyWith(
         status: EditStatus.success,
         images: results,
+      );
+
+      // 发送通知
+      showNotification(
+        '🖼️ 图片编辑完成',
+        '已生成 ${results.length} 张图片，点击查看',
       );
     } on DioException catch (e) {
       if (e.type == DioExceptionType.cancel) {

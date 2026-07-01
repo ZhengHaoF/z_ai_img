@@ -10,7 +10,7 @@ class ApiConfig {
 
   // 超时配置
   static const Duration connectTimeout = Duration(seconds: 30);
-  static const Duration receiveTimeout = Duration(seconds: 120);
+  static const Duration receiveTimeout = Duration(minutes: 5);
 
   // 图片尺寸选项
   static const List<String> imageSizes = [
@@ -49,6 +49,21 @@ class ApiConfig {
   // 提示词最大字符数
   static const int maxPromptLength = 1000;
   static const int maxEditPromptLength = 32000;
+
+  // 对话 API 地址
+  static const String chatBaseUrl = 'https://jeniya.top';
+
+  // 对话 API 端点
+  static const String chatCompletionsEndpoint = '/v1/chat/completions';
+
+  // 对话模型选项
+  static const List<String> chatModels = ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo'];
+
+  // 默认对话模型
+  static const String defaultChatModel = 'gpt-4o';
+
+  // 默认温度
+  static const double defaultTemperature = 0.7;
 
   // LRU 缓存上限
   static const int maxImageCacheSize = 20;
