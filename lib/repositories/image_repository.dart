@@ -11,10 +11,11 @@ import '../services/image_service.dart';
 
 class ImageRepository {
   final ImageService _imageService;
+  final ApiClient _apiClient;
   final Map<String, ImageResult> _cache = {};
   final List<String> _cacheOrder = [];
 
-  ImageRepository(this._imageService);
+  ImageRepository(this._imageService, this._apiClient);
 
   Future<List<ImageResult>> generateImage({
     required GenerateRequest request,
@@ -32,11 +33,21 @@ class ImageRepository {
     final results = <ImageResult>[];
 
     for (final imageData in response.data) {
+      Uint8List? imageBytes;
+
       if (imageData.hasB64Json) {
-        final imageBytes = base64Decode(imageData.b64Json!);
+        imageBytes = Uint8List.fromList(base64Decode(imageData.b64Json!));
+      } else if (imageData.url != null && imageData.url!.isNotEmpty) {
+        imageBytes = await _apiClient.downloadImage(
+          imageData.url!,
+          cancelToken: cancelToken,
+        );
+      }
+
+      if (imageBytes != null) {
         final result = ImageResult(
           id: DateTime.now().millisecondsSinceEpoch.toString(),
-          imageData: Uint8List.fromList(imageBytes),
+          imageData: imageBytes,
           prompt: request.prompt,
         );
         results.add(result);

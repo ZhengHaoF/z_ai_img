@@ -4,6 +4,7 @@ import '../config/api_config.dart';
 import '../services/api_client.dart';
 import '../services/image_service.dart';
 import '../repositories/image_repository.dart';
+import 'network_log_provider.dart';
 
 // SharedPreferences provider
 final sharedPreferencesProvider = Provider<SharedPreferences>((ref) {
@@ -16,6 +17,9 @@ final apiClientProvider = Provider<ApiClient>((ref) {
   final client = ApiClient(
     baseUrl: prefs.getString('baseUrl') ?? ApiConfig.defaultBaseUrl,
     apiKey: prefs.getString('apiKey') ?? '',
+    onLog: (log) {
+      ref.read(networkLogProvider.notifier).addLog(log);
+    },
   );
   // 监听 settings 变化，实时更新 ApiClient 配置
   ref.listen<SettingsState>(settingsProvider, (prev, next) {
@@ -35,7 +39,8 @@ final imageServiceProvider = Provider<ImageService>((ref) {
 // Image Repository provider
 final imageRepositoryProvider = Provider<ImageRepository>((ref) {
   final imageService = ref.watch(imageServiceProvider);
-  return ImageRepository(imageService);
+  final apiClient = ref.watch(apiClientProvider);
+  return ImageRepository(imageService, apiClient);
 });
 
 // Settings state

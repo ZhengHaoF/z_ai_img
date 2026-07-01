@@ -31,16 +31,10 @@ class ApiConfig {
   static const List<String> qualityOptions = ['low', 'medium', 'high', 'auto'];
 
   // 模型选项 - 文生图
-  static const List<String> generateModels = ['gpt-image-2'];
+  static const List<String> generateModels = ['gpt-image-2', 'z-image-turbo'];
 
   // 模型选项 - 图编辑
-  static const List<String> editModels = [
-    'gpt-image-2',
-    'gpt-image-2-all',
-    'gpt-image-1',
-    'flux-kontext-pro',
-    'flux-kontext-max',
-  ];
+  static const List<String> editModels = ['gpt-image-2'];
 
   // 背景透明度选项
   static const List<String> backgroundOptions = ['transparent', 'opaque', 'auto'];

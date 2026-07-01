@@ -2,13 +2,19 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import '../config/api_config.dart';
 import '../exceptions/app_exception.dart';
+import '../models/network_log.dart';
+
+typedef NetworkLogCallback = void Function(NetworkLog log);
 
 class ApiClient {
   late final Dio _dio;
+  late final Dio _downloadDio;
   String _baseUrl;
   String? _apiKey;
+  final NetworkLogCallback? onLog;
+  final Map<String, DateTime> _requestTimestamps = {};
 
-  ApiClient({String? baseUrl, String? apiKey})
+  ApiClient({String? baseUrl, String? apiKey, this.onLog})
       : _baseUrl = baseUrl ?? ApiConfig.defaultBaseUrl,
         _apiKey = apiKey {
     _dio = Dio(
@@ -23,12 +29,21 @@ class ApiClient {
       ),
     );
 
+    _downloadDio = Dio(
+      BaseOptions(
+        connectTimeout: ApiConfig.connectTimeout,
+        receiveTimeout: ApiConfig.receiveTimeout,
+      ),
+    );
+
     _dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) {
           if (_apiKey != null && _apiKey!.isNotEmpty) {
             options.headers['Authorization'] = 'Bearer $_apiKey';
           }
+          final requestId = options.uri.toString();
+          _requestTimestamps[requestId] = DateTime.now();
           if (kDebugMode) {
             debugPrint('=== API Request ===');
             debugPrint('${options.method} ${options.uri}');
@@ -37,21 +52,66 @@ class ApiClient {
               debugPrint('Data: ${options.data}');
             }
           }
+          onLog?.call(
+            NetworkLog(
+              id: requestId,
+              type: NetworkLogType.request,
+              timestamp: DateTime.now(),
+              method: options.method,
+              url: options.uri.toString(),
+              headers: Map<String, dynamic>.from(options.headers),
+              data: options.data,
+            ),
+          );
           return handler.next(options);
         },
         onResponse: (response, handler) {
+          final requestId = response.requestOptions.uri.toString();
+          final startTime = _requestTimestamps.remove(requestId);
+          final duration = startTime != null
+              ? DateTime.now().difference(startTime)
+              : null;
           if (kDebugMode) {
             debugPrint('=== API Response ===');
             debugPrint('Status: ${response.statusCode}');
             debugPrint('Data: ${response.data}');
           }
+          onLog?.call(
+            NetworkLog(
+              id: requestId,
+              type: NetworkLogType.response,
+              timestamp: DateTime.now(),
+              method: response.requestOptions.method,
+              url: response.requestOptions.uri.toString(),
+              statusCode: response.statusCode,
+              data: response.data,
+              duration: duration,
+            ),
+          );
           return handler.next(response);
         },
         onError: (error, handler) {
+          final requestId = error.requestOptions.uri.toString();
+          final startTime = _requestTimestamps.remove(requestId);
+          final duration = startTime != null
+              ? DateTime.now().difference(startTime)
+              : null;
           if (kDebugMode) {
             debugPrint('=== API Error ===');
             debugPrint('${error.type}: ${error.message}');
           }
+          onLog?.call(
+            NetworkLog(
+              id: requestId,
+              type: NetworkLogType.error,
+              timestamp: DateTime.now(),
+              method: error.requestOptions.method,
+              url: error.requestOptions.uri.toString(),
+              statusCode: error.response?.statusCode,
+              errorMessage: error.message,
+              duration: duration,
+            ),
+          );
           return handler.next(error);
         },
       ),
@@ -118,6 +178,28 @@ class ApiClient {
           contentType: 'multipart/form-data',
         ),
       );
+    } on DioException catch (e) {
+      throw _handleError(e);
+    }
+  }
+
+  Future<Uint8List> downloadImage(String url, {CancelToken? cancelToken}) async {
+    try {
+      final response = await _downloadDio.get<List<int>>(
+        url,
+        cancelToken: cancelToken,
+        options: Options(
+          responseType: ResponseType.bytes,
+          headers: {
+            'Accept': 'image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          },
+        ),
+      );
+      if (response.data != null) {
+        return Uint8List.fromList(response.data!);
+      }
+      throw NetworkException('下载图片失败', code: 'EMPTY_RESPONSE');
     } on DioException catch (e) {
       throw _handleError(e);
     }
