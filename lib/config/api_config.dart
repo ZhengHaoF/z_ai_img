@@ -10,7 +10,7 @@ class ApiConfig {
 
   // 超时配置
   static const Duration connectTimeout = Duration(seconds: 30);
-  static const Duration receiveTimeout = Duration(minutes: 5);
+  static const Duration receiveTimeout = Duration(minutes: 10);
 
   // 图片尺寸选项
   static const List<String> imageSizes = [
