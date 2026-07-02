@@ -39,29 +39,65 @@ class _HomePageState extends ConsumerState<HomePage> {
           ),
         ],
       ),
-      body: IndexedStack(
-        index: _currentIndex,
-        children: _pages,
+      body: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 200),
+        switchInCurve: Curves.easeInOut,
+        switchOutCurve: Curves.easeInOut,
+        transitionBuilder: (child, animation) {
+          return FadeTransition(
+            opacity: animation,
+            child: SlideTransition(
+              position: Tween<Offset>(
+                begin: const Offset(0, 0.05),
+                end: Offset.zero,
+              ).animate(animation),
+              child: child,
+            ),
+          );
+        },
+        child: IndexedStack(
+          key: ValueKey<int>(_currentIndex),
+          index: _currentIndex,
+          children: _pages,
+        ),
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentIndex,
         onDestinationSelected: (index) {
           setState(() => _currentIndex = index);
         },
-        destinations: const [
+        destinations: [
           NavigationDestination(
-            icon: Icon(Icons.auto_awesome_outlined),
-            selectedIcon: Icon(Icons.auto_awesome),
+            icon: _AnimatedTabIcon(
+              isSelected: _currentIndex == 0,
+              child: const Icon(Icons.auto_awesome_outlined),
+            ),
+            selectedIcon: _AnimatedTabIcon(
+              isSelected: true,
+              child: const Icon(Icons.auto_awesome),
+            ),
             label: '文生图',
           ),
           NavigationDestination(
-            icon: Icon(Icons.edit_outlined),
-            selectedIcon: Icon(Icons.edit),
+            icon: _AnimatedTabIcon(
+              isSelected: _currentIndex == 1,
+              child: const Icon(Icons.edit_outlined),
+            ),
+            selectedIcon: _AnimatedTabIcon(
+              isSelected: true,
+              child: const Icon(Icons.edit),
+            ),
             label: '图编辑',
           ),
           NavigationDestination(
-            icon: Icon(Icons.chat_outlined),
-            selectedIcon: Icon(Icons.chat),
+            icon: _AnimatedTabIcon(
+              isSelected: _currentIndex == 2,
+              child: const Icon(Icons.chat_outlined),
+            ),
+            selectedIcon: _AnimatedTabIcon(
+              isSelected: true,
+              child: const Icon(Icons.chat),
+            ),
             label: '对话',
           ),
         ],
@@ -80,6 +116,26 @@ class _HomePageState extends ConsumerState<HomePage> {
     showDialog(
       context: context,
       builder: (context) => const NetworkLogDialog(),
+    );
+  }
+}
+
+class _AnimatedTabIcon extends StatelessWidget {
+  const _AnimatedTabIcon({
+    required this.isSelected,
+    required this.child,
+  });
+
+  final bool isSelected;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedScale(
+      scale: isSelected ? 1.15 : 1.0,
+      duration: const Duration(milliseconds: 200),
+      curve: Curves.elasticOut,
+      child: child,
     );
   }
 }
