@@ -113,7 +113,9 @@ class GenerateNotifier extends StateNotifier<GenerateState> {
   }
 
   Future<void> generate() async {
+    debugPrint('[GenerateNotifier] generate() 被调用, prompt=${state.prompt.substring(0, state.prompt.length.clamp(0, 20))}...');
     if (state.prompt.trim().isEmpty) {
+      debugPrint('[GenerateNotifier] prompt 为空，设置 error 状态');
       state = state.copyWith(
         status: GenerateStatus.error,
         errorMessage: '请输入提示词',
@@ -127,14 +129,21 @@ class GenerateNotifier extends StateNotifier<GenerateState> {
       errorMessage: null,
       progress: 0,
     );
+    debugPrint('[GenerateNotifier] state 设置为 loading');
 
     // 启动后台服务（仅 Android 端，不显示通知打扰用户）
     if (!kIsWeb) {
+      debugPrint('[GenerateNotifier] 非 Web 平台，准备启动后台服务和通知...');
       try {
         await BackgroundServiceHelper.startService();
+        debugPrint('[GenerateNotifier] 后台服务启动成功，准备显示生成通知...');
+        await ForegroundService.showGeneratingNotification();
+        debugPrint('[GenerateNotifier] showGeneratingNotification 调用完成');
       } catch (e) {
         debugPrint('启动后台服务失败: $e');
       }
+    } else {
+      debugPrint('[GenerateNotifier] Web 平台，跳过后台服务和通知');
     }
 
     try {
@@ -165,7 +174,8 @@ class GenerateNotifier extends StateNotifier<GenerateState> {
           '已生成 ${results.length} 张图片，点击查看',
         );
       } else {
-        // App 端用前台通知
+        // App 端用前台通知 - 先取消生成中通知
+        await ForegroundService.cancelGenerating();
         await ForegroundService.showCompletedNotification(
           title: '🎨 图片生成完成',
           body: '已生成 ${results.length} 张图片，点击查看',
@@ -187,7 +197,11 @@ class GenerateNotifier extends StateNotifier<GenerateState> {
       }
       // 取消通知 + 隐藏平台状态
       if (!kIsWeb) {
-        ForegroundService.cancelAll();
+        await ForegroundService.cancelGenerating();
+        await ForegroundService.showCompletedNotification(
+          title: '❌ 图片生成失败',
+          body: state.errorMessage ?? '请重试',
+        );
         // BackgroundServiceHelper.stopService();
       }
     } catch (e) {
@@ -197,7 +211,11 @@ class GenerateNotifier extends StateNotifier<GenerateState> {
       );
       // 取消通知 + 隐藏平台状态
       if (!kIsWeb) {
-        ForegroundService.cancelAll();
+        await ForegroundService.cancelGenerating();
+        await ForegroundService.showCompletedNotification(
+          title: '❌ 图片生成失败',
+          body: '请重试',
+        );
         // BackgroundServiceHelper.stopService();
       }
     }
@@ -208,7 +226,7 @@ class GenerateNotifier extends StateNotifier<GenerateState> {
     _cancelToken = null;
     // 取消通知
     if (!kIsWeb) {
-      ForegroundService.cancelAll();
+      ForegroundService.cancelGenerating();
       // BackgroundServiceHelper.stopService();
     }
   }

@@ -24,7 +24,7 @@ void main() async {
 
     // 初始化通知服务和后台服务
     try {
-      ForegroundService.requestPermission();
+      await ForegroundService.requestPermission();
       await BackgroundServiceHelper.initialize();
     } catch (e) {
       debugPrint('⚠️ 初始化通知服务失败: $e');
