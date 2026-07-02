@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'generate/generate_page.dart';
 import 'edit/edit_page.dart';
+import 'chat/chat_page.dart';
 import 'settings/settings_page.dart';
 import '../widgets/network_log_dialog.dart';
 
@@ -18,13 +19,14 @@ class _HomePageState extends ConsumerState<HomePage> {
   final _pages = const [
     GeneratePage(),
     EditPage(),
+    ChatPage(),
   ];
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(_currentIndex == 0 ? '文生图' : '图编辑'),
+        title: Text(_currentIndex == 0 ? '文生图' : _currentIndex == 1 ? '图编辑' : '对话'),
         actions: [
           IconButton(
             icon: const Icon(Icons.bug_report_outlined),
@@ -56,6 +58,11 @@ class _HomePageState extends ConsumerState<HomePage> {
             icon: Icon(Icons.edit_outlined),
             selectedIcon: Icon(Icons.edit),
             label: '图编辑',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.chat_outlined),
+            selectedIcon: Icon(Icons.chat),
+            label: '对话',
           ),
         ],
       ),

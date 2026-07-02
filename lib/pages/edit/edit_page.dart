@@ -1,12 +1,14 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../config/api_config.dart';
 import '../../models/image_result.dart';
 import '../../providers/edit_provider.dart';
 import '../../providers/settings_provider.dart';
 import '../../utils/image_utils.dart';
+import '../../utils/foreground_service.dart';  // 新增：生命周期感知
 import '../preview/image_preview_page.dart';
 
 class EditPage extends ConsumerStatefulWidget {
@@ -16,16 +18,61 @@ class EditPage extends ConsumerStatefulWidget {
   ConsumerState<EditPage> createState() => _EditPageState();
 }
 
-class _EditPageState extends ConsumerState<EditPage> {
+class _EditPageState extends ConsumerState<EditPage>
+    with WidgetsBindingObserver {  // 监听 App 生命周期
   final _promptController = TextEditingController();
   final _promptFocusNode = FocusNode();
   bool _showAdvanced = false;
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _promptController.dispose();
     _promptFocusNode.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    final editState = ref.read(editProvider);
+
+    if (state == AppLifecycleState.paused) {
+      // App 进入后台，如果有正在进行的编辑，显示提示
+      if (editState.isLoading) {
+        ForegroundService.updateGeneratingNotification(
+          title: '⏸️ 图片编辑中',
+          body: '编辑仍在继续，切回 App 查看结果',
+        );
+      }
+    } else if (state == AppLifecycleState.resumed) {
+      // App 回到前台，如果之前在编辑但现在失败了，给出提示
+      if (editState.status == EditStatus.error) {
+        final errorMsg = editState.errorMessage ?? '';
+        if (errorMsg.contains('连接') || errorMsg.contains('timeout') || errorMsg.contains('Socket')) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('⚠️ 由于切后台，编辑任务可能已中断。是否重新尝试？'),
+              action: SnackBarAction(
+                label: '重试',
+                onPressed: () {
+                  final notifier = ref.read(editProvider.notifier);
+                  notifier.edit();
+                },
+              ),
+              behavior: SnackBarBehavior.floating,
+              duration: const Duration(seconds: 5),
+            ),
+          );
+        }
+      }
+    }
   }
 
   @override
@@ -430,7 +477,9 @@ class _EditPageState extends ConsumerState<EditPage> {
           child: ElevatedButton.icon(
             onPressed: state.isLoading
                 ? null
-                : (settings.hasApiKey ? () => notifier.edit() : null),
+                : (settings.hasApiKey
+                    ? () => _onEditPressed(context, notifier, settings)
+                    : null),
             icon: state.isLoading
                 ? const SizedBox(
                     width: 20,
@@ -454,6 +503,15 @@ class _EditPageState extends ConsumerState<EditPage> {
         ],
       ],
     );
+  }
+
+  /// 编辑按钮点击处理
+  Future<void> _onEditPressed(
+    BuildContext context,
+    EditNotifier notifier,
+    SettingsState settings,
+  ) async {
+    await notifier.edit();
   }
 
   Widget _buildResults(EditState state, EditNotifier notifier) {
@@ -555,6 +613,7 @@ class _EditPageState extends ConsumerState<EditPage> {
   }
 
   Widget _buildErrorState(String? message) {
+    final errorText = message ?? '发生错误';
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -562,6 +621,7 @@ class _EditPageState extends ConsumerState<EditPage> {
         borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Icon(
             Icons.error_outline,
@@ -570,11 +630,30 @@ class _EditPageState extends ConsumerState<EditPage> {
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              message ?? '发生错误',
+              errorText,
               style: TextStyle(
                 color: Theme.of(context).colorScheme.onErrorContainer,
               ),
             ),
+          ),
+          const SizedBox(width: 8),
+          IconButton(
+            icon: Icon(
+              Icons.copy,
+              size: 18,
+              color: Theme.of(context).colorScheme.onErrorContainer,
+            ),
+            tooltip: '复制错误信息',
+            onPressed: () {
+              Clipboard.setData(ClipboardData(text: errorText));
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('已复制到剪贴板'),
+                  behavior: SnackBarBehavior.floating,
+                  duration: Duration(seconds: 1),
+                ),
+              );
+            },
           ),
         ],
       ),

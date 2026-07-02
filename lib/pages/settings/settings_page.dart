@@ -1,7 +1,10 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../config/api_config.dart';
 import '../../providers/settings_provider.dart';
+import '../../providers/chat_provider.dart';
+import '../../utils/system_tray.dart';
 import '../../utils/validators.dart';
 
 class SettingsPage extends ConsumerStatefulWidget {
@@ -229,6 +232,58 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
 
             const SizedBox(height: 16),
 
+            // 托盘图标设置 (仅 Windows/macOS/Linux 显示)
+            if (settings.isTraySupported)
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        '托盘图标',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+
+                      // 托盘图标开关
+                      SwitchListTile(
+                        title: const Text('显示托盘图标'),
+                        subtitle: const Text('在系统托盘显示应用图标'),
+                        value: settings.showTrayIcon,
+                        onChanged: (value) async {
+                          notifier.setShowTrayIcon(value);
+                          // 初始化或销毁托盘
+                          if (value) {
+                            await SystemTrayManager.instance.initialize(
+                              onOpenWindow: () {
+                                debugPrint('托盘: 打开主窗口');
+                              },
+                              onCancelTask: () {
+                                debugPrint('托盘: 取消任务');
+                              },
+                              onQuit: () {
+                                debugPrint('托盘: 退出应用');
+                                exit(0);
+                              },
+                            );
+                          } else {
+                            await SystemTrayManager.instance.dispose();
+                          }
+                        },
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+            if (settings.isTraySupported)
+              const SizedBox(height: 16),
+
             // 清除缓存
             Card(
               child: Padding(
@@ -250,6 +305,14 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                       subtitle: const Text('重置所有设置到默认值'),
                       contentPadding: EdgeInsets.zero,
                       onTap: () => _showClearSettingsDialog(notifier),
+                    ),
+                    const Divider(),
+                    ListTile(
+                      leading: const Icon(Icons.chat_outlined),
+                      title: const Text('清空对话历史'),
+                      subtitle: const Text('清除所有对话记录'),
+                      contentPadding: EdgeInsets.zero,
+                      onTap: _showClearChatDialog,
                     ),
                   ],
                 ),
@@ -321,6 +384,35 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
                   content: Text('设置已清除'),
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+            },
+            child: const Text('确定'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showClearChatDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('清空对话'),
+        content: const Text('确定要清空所有对话记录吗？此操作不可恢复。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () {
+              ref.read(chatProvider.notifier).clearChat();
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('对话已清空'),
                   behavior: SnackBarBehavior.floating,
                 ),
               );

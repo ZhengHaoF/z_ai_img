@@ -1,11 +1,15 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/foundation.dart';
+import 'dart:io';
 import '../config/api_config.dart';
 import '../models/generate/generate_request.dart';
 import '../models/image_result.dart';
 import '../providers/settings_provider.dart';
 import '../repositories/image_repository.dart';
 import '../utils/notification_service.dart' show showNotification;
+import '../utils/foreground_service.dart';
+import '../utils/background_service_helper.dart';
 
 // Generate state
 enum GenerateStatus { idle, loading, success, error, partial }
@@ -124,6 +128,15 @@ class GenerateNotifier extends StateNotifier<GenerateState> {
       progress: 0,
     );
 
+    // 启动后台服务（仅 Android 端，不显示通知打扰用户）
+    if (!kIsWeb) {
+      try {
+        await BackgroundServiceHelper.startService();
+      } catch (e) {
+        debugPrint('启动后台服务失败: $e');
+      }
+    }
+
     try {
       final request = GenerateRequest(
         model: state.model,
@@ -144,11 +157,22 @@ class GenerateNotifier extends StateNotifier<GenerateState> {
         images: results,
       );
 
-      // 发送通知
-      showNotification(
-        '🎨 图片生成完成',
-        '已生成 ${results.length} 张图片，点击查看',
-      );
+      // 显示完成通知 + 更新平台状态
+      if (kIsWeb) {
+        // Web 端用浏览器通知
+        showNotification(
+          '🎨 图片生成完成',
+          '已生成 ${results.length} 张图片，点击查看',
+        );
+      } else {
+        // App 端用前台通知
+        await ForegroundService.showCompletedNotification(
+          title: '🎨 图片生成完成',
+          body: '已生成 ${results.length} 张图片，点击查看',
+        );
+        // ⚠️ 暂时禁用后台服务
+        // // BackgroundServiceHelper.stopService();
+      }
     } on DioException catch (e) {
       if (e.type == DioExceptionType.cancel) {
         state = state.copyWith(
@@ -161,17 +185,32 @@ class GenerateNotifier extends StateNotifier<GenerateState> {
           errorMessage: e.message ?? '生成失败',
         );
       }
+      // 取消通知 + 隐藏平台状态
+      if (!kIsWeb) {
+        ForegroundService.cancelAll();
+        // BackgroundServiceHelper.stopService();
+      }
     } catch (e) {
       state = state.copyWith(
         status: GenerateStatus.error,
         errorMessage: e.toString(),
       );
+      // 取消通知 + 隐藏平台状态
+      if (!kIsWeb) {
+        ForegroundService.cancelAll();
+        // BackgroundServiceHelper.stopService();
+      }
     }
   }
 
   void cancel() {
     _cancelToken?.cancel();
     _cancelToken = null;
+    // 取消通知
+    if (!kIsWeb) {
+      ForegroundService.cancelAll();
+      // BackgroundServiceHelper.stopService();
+    }
   }
 
   void reset() {

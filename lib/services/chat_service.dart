@@ -62,34 +62,53 @@ class ChatService {
       ),
     );
 
-    final response = await _dio.post(
-      url,
-      data: request.toJson(),
-      options: Options(
-        headers: {
-          'Authorization': 'Bearer $_apiKey',
-          'Content-Type': 'application/json',
-        },
-      ),
-      cancelToken: cancelToken,
-    );
+    try {
+      final response = await _dio.post(
+        url,
+        data: request.toJson(),
+        options: Options(
+          headers: {
+            'Authorization': 'Bearer $_apiKey',
+            'Content-Type': 'application/json',
+          },
+        ),
+        cancelToken: cancelToken,
+      );
 
-    // 记录响应日志
-    final startTime = _requestTimestamps.remove(requestId);
-    final duration = startTime != null ? DateTime.now().difference(startTime) : null;
-    _onLog?.call(
-      NetworkLog(
-        id: requestId,
-        type: NetworkLogType.response,
-        timestamp: DateTime.now(),
-        method: 'POST',
-        url: url,
-        statusCode: response.statusCode,
-        data: response.data,
-        duration: duration,
-      ),
-    );
+      // 记录响应日志
+      final startTime = _requestTimestamps.remove(requestId);
+      final duration = startTime != null ? DateTime.now().difference(startTime) : null;
+      _onLog?.call(
+        NetworkLog(
+          id: requestId,
+          type: NetworkLogType.response,
+          timestamp: DateTime.now(),
+          method: 'POST',
+          url: url,
+          statusCode: response.statusCode,
+          data: response.data,
+          duration: duration,
+        ),
+      );
 
-    return ChatResponse.fromJson(response.data as Map<String, dynamic>);
+      return ChatResponse.fromJson(response.data as Map<String, dynamic>);
+    } on DioException catch (e) {
+      // 记录错误日志
+      final startTime = _requestTimestamps.remove(requestId);
+      final duration = startTime != null ? DateTime.now().difference(startTime) : null;
+      _onLog?.call(
+        NetworkLog(
+          id: requestId,
+          type: NetworkLogType.error,
+          timestamp: DateTime.now(),
+          method: 'POST',
+          url: url,
+          statusCode: e.response?.statusCode,
+          errorMessage: e.message ?? '网络请求失败',
+          duration: duration,
+        ),
+      );
+      rethrow;
+    }
   }
 }

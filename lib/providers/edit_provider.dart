@@ -1,12 +1,16 @@
 import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/foundation.dart';
+import 'dart:io';
 import '../config/api_config.dart';
 import '../models/edit/edit_request.dart';
 import '../models/image_result.dart';
 import '../providers/settings_provider.dart';
 import '../repositories/image_repository.dart';
 import '../utils/notification_service.dart' show showNotification;
+import '../utils/foreground_service.dart';
+import '../utils/background_service_helper.dart';
 
 // Edit state
 enum EditStatus { idle, loading, uploading, success, error }
@@ -173,6 +177,15 @@ class EditNotifier extends StateNotifier<EditState> {
       progress: 0,
     );
 
+    // 启动后台服务（仅 Android 端，不显示通知打扰用户）
+    if (!kIsWeb) {
+      try {
+        await BackgroundServiceHelper.startService();
+      } catch (e) {
+        debugPrint('启动后台服务失败: $e');
+      }
+    }
+
     try {
       final request = EditRequest(
         images: state.sourceImages,
@@ -203,11 +216,22 @@ class EditNotifier extends StateNotifier<EditState> {
         images: results,
       );
 
-      // 发送通知
-      showNotification(
-        '🖼️ 图片编辑完成',
-        '已生成 ${results.length} 张图片，点击查看',
-      );
+      // 显示完成通知 + 更新平台状态
+      if (kIsWeb) {
+        showNotification(
+          '🖼️ 图片编辑完成',
+          '已生成 ${results.length} 张图片，点击查看',
+        );
+      } else {
+        await ForegroundService.showCompletedNotification(
+          title: '🖼️ 图片编辑完成',
+          body: '已生成 ${results.length} 张图片，点击查看',
+        );
+        // 停止后台服务
+        if (!kIsWeb) {
+          // BackgroundServiceHelper.stopService();
+        }
+      }
     } on DioException catch (e) {
       if (e.type == DioExceptionType.cancel) {
         state = state.copyWith(
@@ -220,17 +244,31 @@ class EditNotifier extends StateNotifier<EditState> {
           errorMessage: e.message ?? '编辑失败',
         );
       }
+      // 取消通知 + 隐藏平台状态
+      if (!kIsWeb) {
+        ForegroundService.cancelAll();
+        // BackgroundServiceHelper.stopService();
+      }
     } catch (e) {
       state = state.copyWith(
         status: EditStatus.error,
         errorMessage: e.toString(),
       );
+      // 取消通知 + 隐藏平台状态
+      if (!kIsWeb) {
+        ForegroundService.cancelAll();
+        // BackgroundServiceHelper.stopService();
+      }
     }
   }
 
   void cancel() {
     _cancelToken?.cancel();
     _cancelToken = null;
+    // 取消通知
+    if (!kIsWeb) {
+      ForegroundService.cancelAll();
+    }
   }
 
   void reset() {

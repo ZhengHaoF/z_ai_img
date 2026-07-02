@@ -50,10 +50,6 @@ class _ImagePreviewPageState extends State<ImagePreviewPage> {
               ),
               actions: [
                 IconButton(
-                  icon: const Icon(Icons.share, color: Colors.white),
-                  onPressed: () => _shareImage(),
-                ),
-                IconButton(
                   icon: const Icon(Icons.save_alt, color: Colors.white),
                   onPressed: () => _saveImage(),
                 ),
@@ -160,15 +156,5 @@ class _ImagePreviewPageState extends State<ImagePreviewPage> {
         ),
       );
     }
-  }
-
-  Future<void> _shareImage() async {
-    // TODO: 实现分享功能
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('分享功能开发中'),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
   }
 }

@@ -22,6 +22,8 @@ class ApiClient {
         baseUrl: _baseUrl,
         connectTimeout: ApiConfig.connectTimeout,
         receiveTimeout: ApiConfig.receiveTimeout,
+        // 保持长连接，提高后台请求成功率
+        persistentConnection: true,
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',

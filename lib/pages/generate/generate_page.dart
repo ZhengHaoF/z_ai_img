@@ -1,12 +1,14 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../config/api_config.dart';
 import '../../models/image_result.dart';
 import '../../providers/generate_provider.dart';
 import '../../providers/settings_provider.dart';
 import '../../utils/image_utils.dart';
+import '../../utils/foreground_service.dart';  // 新增：生命周期感知
 import '../preview/image_preview_page.dart';
 
 class GeneratePage extends ConsumerStatefulWidget {
@@ -16,16 +18,63 @@ class GeneratePage extends ConsumerStatefulWidget {
   ConsumerState<GeneratePage> createState() => _GeneratePageState();
 }
 
-class _GeneratePageState extends ConsumerState<GeneratePage> {
+class _GeneratePageState extends ConsumerState<GeneratePage>
+    with WidgetsBindingObserver {  // 监听 App 生命周期
   final _promptController = TextEditingController();
   final _promptFocusNode = FocusNode();
   bool _showAdvanced = false;
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _promptController.dispose();
     _promptFocusNode.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    final genState = ref.read(generateProvider);
+
+    if (state == AppLifecycleState.paused) {
+      // App 进入后台，如果有正在进行的生成，显示提示
+      if (genState.isLoading) {
+        // 切后台时更新通知，让用户知道任务还在进行
+        ForegroundService.updateGeneratingNotification(
+          title: '⏸️ 图片生成中',
+          body: '生成仍在继续，切回 App 查看结果',
+        );
+      }
+    } else if (state == AppLifecycleState.resumed) {
+      // App 回到前台，如果之前在生成但现在失败了，给出提示
+      if (genState.status == GenerateStatus.error) {
+        final errorMsg = genState.errorMessage ?? '';
+        if (errorMsg.contains('连接') || errorMsg.contains('timeout') || errorMsg.contains('Socket')) {
+          // 由于切后台导致连接断开，给出更明确的提示
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('⚠️ 由于切后台，生成任务可能已中断。是否重新尝试？'),
+              action: SnackBarAction(
+                label: '重试',
+                onPressed: () {
+                  final notifier = ref.read(generateProvider.notifier);
+                  notifier.generate();
+                },
+              ),
+              behavior: SnackBarBehavior.floating,
+              duration: const Duration(seconds: 5),
+            ),
+          );
+        }
+      }
+    }
   }
 
   @override
@@ -275,7 +324,9 @@ class _GeneratePageState extends ConsumerState<GeneratePage> {
           child: ElevatedButton.icon(
             onPressed: state.isLoading
                 ? null
-                : (settings.hasApiKey ? () => notifier.generate() : null),
+                : (settings.hasApiKey
+                    ? () => _onGeneratePressed(context, notifier, settings)
+                    : null),
             icon: state.isLoading
                 ? const SizedBox(
                     width: 20,
@@ -299,6 +350,15 @@ class _GeneratePageState extends ConsumerState<GeneratePage> {
         ],
       ],
     );
+  }
+
+  /// 生成按钮点击处理（包含悬浮窗权限检查）
+  Future<void> _onGeneratePressed(
+    BuildContext context,
+    GenerateNotifier notifier,
+    SettingsState settings,
+  ) async {
+    await notifier.generate();
   }
 
   Widget _buildResults(GenerateState state, GenerateNotifier notifier) {
@@ -400,6 +460,7 @@ class _GeneratePageState extends ConsumerState<GeneratePage> {
   }
 
   Widget _buildErrorState(String? message) {
+    final errorText = message ?? '发生错误';
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -407,6 +468,7 @@ class _GeneratePageState extends ConsumerState<GeneratePage> {
         borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Icon(
             Icons.error_outline,
@@ -415,11 +477,30 @@ class _GeneratePageState extends ConsumerState<GeneratePage> {
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              message ?? '发生错误',
+              errorText,
               style: TextStyle(
                 color: Theme.of(context).colorScheme.onErrorContainer,
               ),
             ),
+          ),
+          const SizedBox(width: 8),
+          IconButton(
+            icon: Icon(
+              Icons.copy,
+              size: 18,
+              color: Theme.of(context).colorScheme.onErrorContainer,
+            ),
+            tooltip: '复制错误信息',
+            onPressed: () {
+              Clipboard.setData(ClipboardData(text: errorText));
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('已复制到剪贴板'),
+                  behavior: SnackBarBehavior.floating,
+                  duration: Duration(seconds: 1),
+                ),
+              );
+            },
           ),
         ],
       ),

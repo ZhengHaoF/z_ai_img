@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/chat/chat_models.dart';
 import '../../providers/chat_provider.dart';
@@ -299,6 +300,25 @@ class _ChatPageState extends ConsumerState<ChatPage> {
               ),
             ),
           ),
+          IconButton(
+            onPressed: () {
+              Clipboard.setData(ClipboardData(text: error));
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('已复制到剪贴板'),
+                  behavior: SnackBarBehavior.floating,
+                  duration: Duration(seconds: 1),
+                ),
+              );
+            },
+            icon: const Icon(Icons.copy),
+            iconSize: 18,
+            color: theme.colorScheme.onErrorContainer,
+            tooltip: '复制错误信息',
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+          ),
+          const SizedBox(width: 4),
           IconButton(
             onPressed: () {
               ref.read(chatProvider.notifier).clearError();
