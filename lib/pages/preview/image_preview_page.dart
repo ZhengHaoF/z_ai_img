@@ -76,6 +76,12 @@ class _ImagePreviewPageState extends State<ImagePreviewPage> {
                     child: Image.memory(
                       image.imageData,
                       fit: BoxFit.contain,
+                      errorBuilder: (context, error, stackTrace) {
+                        return Container(
+                          color: Colors.red.withOpacity(0.2),
+                          child: const Icon(Icons.broken_image, color: Colors.white70, size: 48),
+                        );
+                      },
                     ),
                   ),
                 );

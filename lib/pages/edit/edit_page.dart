@@ -515,78 +515,97 @@ class _EditPageState extends ConsumerState<EditPage>
   }
 
   Widget _buildResults(EditState state, EditNotifier notifier) {
-    if (state.status == EditStatus.idle && !state.hasImages) {
+    // 没有任何图片且空闲 → 显示空状态引导
+    if (!state.hasImages && state.status == EditStatus.idle) {
       return _buildEmptyState();
     }
 
-    if (state.status == EditStatus.error) {
+    // 没有任何图片但有错误 → 只显示错误
+    if (!state.hasImages && state.status == EditStatus.error) {
       return _buildErrorState(state.errorMessage);
     }
 
-    if (state.hasImages) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                '编辑结果',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-              ),
-              TextButton.icon(
-                onPressed: notifier.clearImages,
-                icon: const Icon(Icons.clear_all, size: 18),
-                label: const Text('清除'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              crossAxisSpacing: 8,
-              mainAxisSpacing: 8,
-            ),
-            itemCount: state.images.length,
-            itemBuilder: (context, index) {
-              final image = state.images[index];
-              return GestureDetector(
-                onTap: () => _openPreview(index, state.images),
-                child: Card(
-                  clipBehavior: Clip.antiAlias,
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      Image.memory(
-                        image.imageData,
-                        fit: BoxFit.cover,
-                      ),
-                      Positioned(
-                        right: 4,
-                        bottom: 4,
-                        child: IconButton(
-                          icon: const Icon(Icons.save_alt),
-                          style: IconButton.styleFrom(
-                            backgroundColor: Colors.black54,
-                            foregroundColor: Colors.white,
-                          ),
-                          onPressed: () => _saveImage(image.imageData),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            },
-          ),
-        ],
-      );
+    // 有图片 → 始终显示图片网格
+    final children = <Widget>[];
+
+    // 在图片上方始终显示错误横幅（如果有错误）
+    if (state.status == EditStatus.error) {
+      children.add(_buildErrorState(state.errorMessage));
+      children.add(const SizedBox(height: 12));
     }
 
-    return const SizedBox.shrink();
+    children.addAll([
+      Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          const Text(
+            '编辑结果',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+          ),
+          TextButton.icon(
+            onPressed: _onClearPressed,
+            icon: const Icon(Icons.clear_all, size: 18),
+            label: const Text('清除'),
+          ),
+        ],
+      ),
+      const SizedBox(height: 8),
+      GridView.builder(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          crossAxisSpacing: 8,
+          mainAxisSpacing: 8,
+        ),
+        itemCount: state.images.length,
+        itemBuilder: (context, index) {
+          final image = state.images[index];
+          return GestureDetector(
+            onTap: () => _openPreview(index, state.images),
+            child: Card(
+              clipBehavior: Clip.antiAlias,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  Image.memory(
+                    image.imageData,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) {
+                      return Container(
+                        color: Theme.of(context).colorScheme.errorContainer,
+                        child: Icon(
+                          Icons.broken_image,
+                          color: Theme.of(context).colorScheme.error,
+                          size: 32,
+                        ),
+                      );
+                    },
+                  ),
+                  Positioned(
+                    right: 4,
+                    bottom: 4,
+                    child: IconButton(
+                      icon: const Icon(Icons.save_alt),
+                      style: IconButton.styleFrom(
+                        backgroundColor: Colors.black54,
+                        foregroundColor: Colors.white,
+                      ),
+                      onPressed: () => _saveImage(image.imageData),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    ]);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: children,
+    );
   }
 
   Widget _buildEmptyState() {
@@ -684,6 +703,30 @@ class _EditPageState extends ConsumerState<EditPage>
         ),
       ),
     );
+  }
+
+  Future<void> _onClearPressed() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('确认清除'),
+        content: const Text('确定要清空所有已编辑的图片吗？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('确定'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      ref.read(editProvider.notifier).clearImages();
+    }
   }
 
   Future<void> _saveImage(Uint8List imageData) async {

@@ -22,7 +22,6 @@
             android:name=".MainActivity"
             android:exported="true"
             android:launchMode="singleTop"
-            android:taskAffinity=""
             android:theme="@style/LaunchTheme"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
             android:hardwareAccelerated="true"
@@ -53,12 +52,11 @@
                 tools:node="remove" />
         </provider>
 
-        <!-- Flutter Background Service -->
+        <!-- 原生前台保活服务 -->
         <service
-            android:name="id.flutter.flutter_background_service.BackgroundService"
+            android:name=".GenerateForegroundService"
             android:foregroundServiceType="dataSync"
-            android:exported="true"
-            tools:replace="android:exported"/>
+            android:exported="false" />
 
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->

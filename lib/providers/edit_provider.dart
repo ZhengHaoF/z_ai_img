@@ -8,9 +8,8 @@ import '../models/edit/edit_request.dart';
 import '../models/image_result.dart';
 import '../providers/settings_provider.dart';
 import '../repositories/image_repository.dart';
-import '../utils/notification_service.dart' show showNotification;
 import '../utils/foreground_service.dart';
-import '../utils/background_service_helper.dart';
+import '../utils/native_foreground_service.dart';
 
 // Edit state
 enum EditStatus { idle, loading, uploading, success, error }
@@ -177,12 +176,22 @@ class EditNotifier extends StateNotifier<EditState> {
       progress: 0,
     );
 
-    // 启动后台服务（仅 Android 端，不显示通知打扰用户）
+    // 启动原生前台保活服务 + 进度通知
     if (!kIsWeb) {
       try {
-        await BackgroundServiceHelper.startService();
+        await NativeForegroundService.start(
+          title: '🖼️ 图片编辑中',
+          body: state.prompt.length > 30
+              ? '${state.prompt.substring(0, 30)}...'
+              : state.prompt,
+        );
       } catch (e) {
-        debugPrint('启动后台服务失败: $e');
+        debugPrint('启动前台保活失败: $e');
+      }
+      try {
+        await ForegroundService.showGeneratingNotification();
+      } catch (e) {
+        debugPrint('显示生成通知失败: $e');
       }
     }
 
@@ -213,24 +222,19 @@ class EditNotifier extends StateNotifier<EditState> {
 
       state = state.copyWith(
         status: EditStatus.success,
-        images: results,
+        images: [...state.images, ...results],
       );
 
-      // 显示完成通知 + 更新平台状态
-      if (kIsWeb) {
-        showNotification(
-          '🖼️ 图片编辑完成',
-          '已生成 ${results.length} 张图片，点击查看',
-        );
-      } else {
-        await ForegroundService.showCompletedNotification(
-          title: '🖼️ 图片编辑完成',
-          body: '已生成 ${results.length} 张图片，点击查看',
-        );
-        // 停止后台服务
-        if (!kIsWeb) {
-          // BackgroundServiceHelper.stopService();
-        }
+      // 停止保活，显示完成通知
+      if (!kIsWeb) {
+        try { await NativeForegroundService.stop(); } catch (_) {}
+        try { await ForegroundService.cancelGenerating(); } catch (_) {}
+        try {
+          await ForegroundService.showCompletedNotification(
+            title: '🖼️ 图片编辑完成',
+            body: '已生成 ${results.length} 张图片，点击查看',
+          );
+        } catch (_) {}
       }
     } on DioException catch (e) {
       if (e.type == DioExceptionType.cancel) {
@@ -244,20 +248,18 @@ class EditNotifier extends StateNotifier<EditState> {
           errorMessage: e.message ?? '编辑失败',
         );
       }
-      // 取消通知 + 隐藏平台状态
       if (!kIsWeb) {
-        ForegroundService.cancelAll();
-        // BackgroundServiceHelper.stopService();
+        try { await NativeForegroundService.stop(); } catch (_) {}
+        try { await ForegroundService.cancelGenerating(); } catch (_) {}
       }
     } catch (e) {
       state = state.copyWith(
         status: EditStatus.error,
         errorMessage: e.toString(),
       );
-      // 取消通知 + 隐藏平台状态
       if (!kIsWeb) {
-        ForegroundService.cancelAll();
-        // BackgroundServiceHelper.stopService();
+        try { await NativeForegroundService.stop(); } catch (_) {}
+        try { await ForegroundService.cancelGenerating(); } catch (_) {}
       }
     }
   }
@@ -265,9 +267,10 @@ class EditNotifier extends StateNotifier<EditState> {
   void cancel() {
     _cancelToken?.cancel();
     _cancelToken = null;
-    // 取消通知
+    // 取消时也停止保活
     if (!kIsWeb) {
-      ForegroundService.cancelAll();
+      NativeForegroundService.stop();
+      ForegroundService.cancelGenerating();
     }
   }
 

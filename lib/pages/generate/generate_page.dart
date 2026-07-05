@@ -390,7 +390,7 @@ class _GeneratePageState extends ConsumerState<GeneratePage>
             style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
           ),
           TextButton.icon(
-            onPressed: notifier.clearImages,
+            onPressed: _onClearPressed,
             icon: const Icon(Icons.clear_all, size: 18),
             label: const Text('清除'),
           ),
@@ -418,6 +418,16 @@ class _GeneratePageState extends ConsumerState<GeneratePage>
                   Image.memory(
                     image.imageData,
                     fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) {
+                      return Container(
+                        color: Theme.of(context).colorScheme.errorContainer,
+                        child: Icon(
+                          Icons.broken_image,
+                          color: Theme.of(context).colorScheme.error,
+                          size: 32,
+                        ),
+                      );
+                    },
                   ),
                   Positioned(
                     right: 4,
@@ -526,6 +536,30 @@ class _GeneratePageState extends ConsumerState<GeneratePage>
         ),
       ),
     );
+  }
+
+  Future<void> _onClearPressed() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('确认清除'),
+        content: const Text('确定要清空所有已生成的图片吗？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('确定'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      ref.read(generateProvider.notifier).clearImages();
+    }
   }
 
   Future<void> _saveImage(Uint8List imageData) async {

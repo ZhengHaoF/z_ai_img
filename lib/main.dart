@@ -6,7 +6,6 @@ import 'dart:async';
 import 'app.dart';
 import 'providers/settings_provider.dart';
 import 'utils/foreground_service.dart';
-import 'utils/background_service_helper.dart';
 import 'utils/system_tray.dart';
 
 void main() async {
@@ -22,10 +21,9 @@ void main() async {
 
     final sharedPreferences = await SharedPreferences.getInstance();
 
-    // 初始化通知服务和后台服务
+    // 初始化通知服务
     try {
       await ForegroundService.requestPermission();
-      await BackgroundServiceHelper.initialize();
     } catch (e) {
       debugPrint('⚠️ 初始化通知服务失败: $e');
     }

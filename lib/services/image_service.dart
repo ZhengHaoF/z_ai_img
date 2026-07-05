@@ -27,17 +27,21 @@ class ImageService {
       return GenerateResponse(data: [], error: 'Empty response');
     }
 
-    // 优先尝试标准 data 数组格式
-    if (data['data'] != null) {
+    try {
+      // 优先尝试标准 data 数组格式
+      if (data['data'] != null) {
+        return GenerateResponse.fromJson(data);
+      }
+
+      // 兜底尝试 choices 格式
+      if (data['choices'] != null) {
+        return GenerateResponse.fromChoices(data);
+      }
+
       return GenerateResponse.fromJson(data);
+    } catch (e) {
+      return GenerateResponse(data: [], error: '解析响应失败: $e');
     }
-
-    // 兜底尝试 choices 格式
-    if (data['choices'] != null) {
-      return GenerateResponse.fromChoices(data);
-    }
-
-    return GenerateResponse.fromJson(data);
   }
 
   Future<EditResponse> editImage({

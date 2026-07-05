@@ -7,9 +7,8 @@ import '../models/generate/generate_request.dart';
 import '../models/image_result.dart';
 import '../providers/settings_provider.dart';
 import '../repositories/image_repository.dart';
-import '../utils/notification_service.dart' show showNotification;
 import '../utils/foreground_service.dart';
-import '../utils/background_service_helper.dart';
+import '../utils/native_foreground_service.dart';
 
 // Generate state
 enum GenerateStatus { idle, loading, success, error, partial }
@@ -131,19 +130,23 @@ class GenerateNotifier extends StateNotifier<GenerateState> {
     );
     debugPrint('[GenerateNotifier] state 设置为 loading');
 
-    // 启动后台服务（仅 Android 端，不显示通知打扰用户）
+    // 启动原生前台保活服务 + 进度通知
     if (!kIsWeb) {
-      debugPrint('[GenerateNotifier] 非 Web 平台，准备启动后台服务和通知...');
       try {
-        await BackgroundServiceHelper.startService();
-        debugPrint('[GenerateNotifier] 后台服务启动成功，准备显示生成通知...');
-        await ForegroundService.showGeneratingNotification();
-        debugPrint('[GenerateNotifier] showGeneratingNotification 调用完成');
+        await NativeForegroundService.start(
+          title: '🎨 图片生成中',
+          body: state.prompt.length > 30
+              ? '${state.prompt.substring(0, 30)}...'
+              : state.prompt,
+        );
       } catch (e) {
-        debugPrint('启动后台服务失败: $e');
+        debugPrint('启动前台保活失败: $e');
       }
-    } else {
-      debugPrint('[GenerateNotifier] Web 平台，跳过后台服务和通知');
+      try {
+        await ForegroundService.showGeneratingNotification();
+      } catch (e) {
+        debugPrint('显示生成通知失败: $e');
+      }
     }
 
     try {
@@ -163,25 +166,19 @@ class GenerateNotifier extends StateNotifier<GenerateState> {
 
       state = state.copyWith(
         status: GenerateStatus.success,
-        images: results,
+        images: [...state.images, ...results],
       );
 
-      // 显示完成通知 + 更新平台状态
-      if (kIsWeb) {
-        // Web 端用浏览器通知
-        showNotification(
-          '🎨 图片生成完成',
-          '已生成 ${results.length} 张图片，点击查看',
-        );
-      } else {
-        // App 端用前台通知 - 先取消生成中通知
-        await ForegroundService.cancelGenerating();
-        await ForegroundService.showCompletedNotification(
-          title: '🎨 图片生成完成',
-          body: '已生成 ${results.length} 张图片，点击查看',
-        );
-        // ⚠️ 暂时禁用后台服务
-        // // BackgroundServiceHelper.stopService();
+      // 停止保活，显示完成通知
+      if (!kIsWeb) {
+        try { await NativeForegroundService.stop(); } catch (_) {}
+        try { await ForegroundService.cancelGenerating(); } catch (_) {}
+        try {
+          await ForegroundService.showCompletedNotification(
+            title: '🎨 图片生成完成',
+            body: '已生成 ${results.length} 张图片，点击查看',
+          );
+        } catch (_) {}
       }
     } on DioException catch (e) {
       if (e.type == DioExceptionType.cancel) {
@@ -195,28 +192,18 @@ class GenerateNotifier extends StateNotifier<GenerateState> {
           errorMessage: e.message ?? '生成失败',
         );
       }
-      // 取消通知 + 隐藏平台状态
       if (!kIsWeb) {
-        await ForegroundService.cancelGenerating();
-        await ForegroundService.showCompletedNotification(
-          title: '❌ 图片生成失败',
-          body: state.errorMessage ?? '请重试',
-        );
-        // BackgroundServiceHelper.stopService();
+        try { await NativeForegroundService.stop(); } catch (_) {}
+        try { await ForegroundService.cancelGenerating(); } catch (_) {}
       }
     } catch (e) {
       state = state.copyWith(
         status: GenerateStatus.error,
         errorMessage: e.toString(),
       );
-      // 取消通知 + 隐藏平台状态
       if (!kIsWeb) {
-        await ForegroundService.cancelGenerating();
-        await ForegroundService.showCompletedNotification(
-          title: '❌ 图片生成失败',
-          body: '请重试',
-        );
-        // BackgroundServiceHelper.stopService();
+        try { await NativeForegroundService.stop(); } catch (_) {}
+        try { await ForegroundService.cancelGenerating(); } catch (_) {}
       }
     }
   }
@@ -224,10 +211,10 @@ class GenerateNotifier extends StateNotifier<GenerateState> {
   void cancel() {
     _cancelToken?.cancel();
     _cancelToken = null;
-    // 取消通知
+    // 取消时也停止保活
     if (!kIsWeb) {
+      NativeForegroundService.stop();
       ForegroundService.cancelGenerating();
-      // BackgroundServiceHelper.stopService();
     }
   }
 
