@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import '../config/api_config.dart';
+import '../core/storage/image_storage.dart';
 import '../exceptions/app_exception.dart';
 import '../models/edit/edit_request.dart';
 import '../models/generate/generate_request.dart';
@@ -12,10 +13,11 @@ import '../services/image_service.dart';
 class ImageRepository {
   final ImageService _imageService;
   final ApiClient _apiClient;
+  final ImageStorage _imageStorage;
   final Map<String, ImageResult> _cache = {};
   final List<String> _cacheOrder = [];
 
-  ImageRepository(this._imageService, this._apiClient);
+  ImageRepository(this._imageService, this._apiClient, this._imageStorage);
 
   Future<List<ImageResult>> generateImage({
     required GenerateRequest request,
@@ -76,11 +78,21 @@ class ImageRepository {
     final results = <ImageResult>[];
 
     for (final imageData in response.data) {
+      Uint8List? imageBytes;
+
       if (imageData.hasB64Json) {
-        final imageBytes = base64Decode(imageData.b64Json!);
+        imageBytes = Uint8List.fromList(base64Decode(imageData.b64Json!));
+      } else if (imageData.url != null && imageData.url!.isNotEmpty) {
+        imageBytes = await _apiClient.downloadImage(
+          imageData.url!,
+          cancelToken: cancelToken,
+        );
+      }
+
+      if (imageBytes != null) {
         final result = ImageResult(
           id: DateTime.now().millisecondsSinceEpoch.toString(),
-          imageData: Uint8List.fromList(imageBytes),
+          imageData: imageBytes,
           prompt: request.prompt,
         );
         results.add(result);
@@ -92,28 +104,35 @@ class ImageRepository {
   }
 
   void _addToCache(ImageResult result) {
-    // LRU 缓存策略
     _cache.remove(result.id);
     _cacheOrder.remove(result.id);
 
     _cache[result.id] = result;
     _cacheOrder.add(result.id);
 
-    // 超过上限，移除最老的
     while (_cacheOrder.length > ApiConfig.maxImageCacheSize) {
       final oldestId = _cacheOrder.removeAt(0);
       _cache.remove(oldestId);
     }
+
+    _imageStorage.save(result.id, result.imageData);
   }
 
-  ImageResult? getFromCache(String id) {
-    final result = _cache[id];
-    if (result != null) {
-      // 更新访问顺序
+  Future<ImageResult?> getFromCache(String id) async {
+    if (_cache.containsKey(id)) {
       _cacheOrder.remove(id);
       _cacheOrder.add(id);
+      return _cache[id];
     }
-    return result;
+
+    final bytes = await _imageStorage.load(id);
+    if (bytes != null) {
+      final result = ImageResult(id: id, imageData: bytes, prompt: '');
+      _cache[id] = result;
+      _cacheOrder.add(id);
+      return result;
+    }
+    return null;
   }
 
   void clearCache() {

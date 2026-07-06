@@ -1,3 +1,77 @@
+class ApiProfile {
+  final String id;
+  final String name;
+  final String apiKey;
+  final String baseUrl;
+  final String? chatBaseUrl;
+
+  const ApiProfile({
+    required this.id,
+    required this.name,
+    required this.apiKey,
+    required this.baseUrl,
+    this.chatBaseUrl,
+  });
+
+  ApiProfile copyWith({
+    String? id,
+    String? name,
+    String? apiKey,
+    String? baseUrl,
+    String? chatBaseUrl,
+  }) {
+    return ApiProfile(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      apiKey: apiKey ?? this.apiKey,
+      baseUrl: baseUrl ?? this.baseUrl,
+      chatBaseUrl: chatBaseUrl ?? this.chatBaseUrl,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return <String, dynamic>{
+      'id': id,
+      'name': name,
+      'apiKey': apiKey,
+      'baseUrl': baseUrl,
+      if (chatBaseUrl != null) 'chatBaseUrl': chatBaseUrl,
+    };
+  }
+
+  factory ApiProfile.fromJson(Map<String, dynamic> json) {
+    return ApiProfile(
+      id: json['id'] as String? ?? json['name'] as String? ?? '',
+      name: json['name'] as String? ?? json['id'] as String? ?? '',
+      apiKey: json['apiKey'] as String? ?? '',
+      baseUrl: json['baseUrl'] as String? ?? '',
+      chatBaseUrl: json['chatBaseUrl'] as String?,
+    );
+  }
+
+  String resolveChatBaseUrl() {
+    final trimmed = chatBaseUrl?.trim();
+    if (trimmed != null && trimmed.isNotEmpty) return trimmed;
+
+    final normalized = baseUrl.trim();
+    if (normalized.isEmpty) return ApiConfig.chatBaseUrl;
+
+    if (normalized.contains('/v1/chat')) {
+      return normalized;
+    }
+
+    if (normalized.endsWith('/v1/images')) {
+      return '${normalized.replaceAll('/v1/images', '')}/v1/chat';
+    }
+
+    if (normalized.endsWith('/v1/images/')) {
+      return '${normalized.replaceAll('/v1/images/', '')}/v1/chat';
+    }
+
+    return normalized;
+  }
+}
+
 class ApiConfig {
   ApiConfig._();
 
@@ -56,6 +130,25 @@ class ApiConfig {
   // 对话 API 端点
   static const String chatCompletionsEndpoint = '/v1/chat/completions';
 
+  static String resolveChatBaseUrl(String baseUrl) {
+    final normalized = baseUrl.trim();
+    if (normalized.isEmpty) return chatBaseUrl;
+
+    if (normalized.contains('/v1/chat')) {
+      return normalized;
+    }
+
+    if (normalized.endsWith('/v1/images')) {
+      return '${normalized.replaceAll('/v1/images', '')}/v1/chat';
+    }
+
+    if (normalized.endsWith('/v1/images/')) {
+      return '${normalized.replaceAll('/v1/images/', '')}/v1/chat';
+    }
+
+    return normalized;
+  }
+
   // 对话模型选项
   static const List<String> chatModels = ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo'];
 
@@ -67,4 +160,27 @@ class ApiConfig {
 
   // LRU 缓存上限
   static const int maxImageCacheSize = 20;
+
+  static const String sharedProfilesKey = 'apiProfiles';
+  static const String sharedActiveProfileIdKey = 'activeProfileId';
+
+  static ApiProfile defaultProfile() {
+    return ApiProfile(
+      id: 'default',
+      name: '默认配置',
+      apiKey: '',
+      baseUrl: defaultBaseUrl,
+    );
+  }
+
+  static List<ApiProfile> legacyProfile(String baseUrl, String apiKey) {
+    return [
+      ApiProfile(
+        id: 'default',
+        name: '默认配置',
+        apiKey: apiKey,
+        baseUrl: baseUrl,
+      ),
+    ];
+  }
 }

@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/chat/chat_models.dart';
 import '../../providers/chat_provider.dart';
+import '../../widgets/common/empty_state.dart';
+import '../../widgets/common/error_banner.dart';
 
 class ChatPage extends ConsumerStatefulWidget {
   const ChatPage({super.key});
@@ -82,31 +84,10 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   }
 
   Widget _buildEmptyState(ThemeData theme) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.chat_outlined,
-            size: 80,
-            color: theme.colorScheme.primary.withOpacity(0.3),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            '开始对话吧',
-            style: theme.textTheme.headlineSmall?.copyWith(
-              color: theme.colorScheme.onSurface.withOpacity(0.5),
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            '发送消息开始与 AI 交流',
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: theme.colorScheme.onSurface.withOpacity(0.4),
-            ),
-          ),
-        ],
-      ),
+    return EmptyState(
+      icon: Icons.chat_outlined,
+      title: '开始对话吧',
+      description: '发送消息开始与 AI 交流',
     );
   }
 
@@ -276,61 +257,21 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   }
 
   Widget _buildErrorBanner(String error, ThemeData theme) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.errorContainer,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            Icons.error_outline,
-            color: theme.colorScheme.onErrorContainer,
-            size: 20,
+    return ErrorBanner(
+      message: error,
+      onCopy: () {
+        Clipboard.setData(ClipboardData(text: error));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('已复制到剪贴板'),
+            behavior: SnackBarBehavior.floating,
+            duration: Duration(seconds: 1),
           ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              error,
-              style: TextStyle(
-                color: theme.colorScheme.onErrorContainer,
-                fontSize: 14,
-              ),
-            ),
-          ),
-          IconButton(
-            onPressed: () {
-              Clipboard.setData(ClipboardData(text: error));
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('已复制到剪贴板'),
-                  behavior: SnackBarBehavior.floating,
-                  duration: Duration(seconds: 1),
-                ),
-              );
-            },
-            icon: const Icon(Icons.copy),
-            iconSize: 18,
-            color: theme.colorScheme.onErrorContainer,
-            tooltip: '复制错误信息',
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(),
-          ),
-          const SizedBox(width: 4),
-          IconButton(
-            onPressed: () {
-              ref.read(chatProvider.notifier).clearError();
-            },
-            icon: const Icon(Icons.close),
-            iconSize: 18,
-            color: theme.colorScheme.onErrorContainer,
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(),
-          ),
-        ],
-      ),
+        );
+      },
+      onDismiss: () {
+        ref.read(chatProvider.notifier).clearError();
+      },
     );
   }
 

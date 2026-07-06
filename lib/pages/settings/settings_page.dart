@@ -16,22 +16,25 @@ class SettingsPage extends ConsumerStatefulWidget {
 
 class _SettingsPageState extends ConsumerState<SettingsPage> {
   final _formKey = GlobalKey<FormState>();
-  late TextEditingController _apiKeyController;
-  late TextEditingController _baseUrlController;
+  final _profileNameController = TextEditingController();
+  final _profileApiKeyController = TextEditingController();
+  final _profileBaseUrlController = TextEditingController();
+  final _profileChatBaseUrlController = TextEditingController();
   bool _obscureApiKey = true;
 
   @override
   void initState() {
     super.initState();
     final settings = ref.read(settingsProvider);
-    _apiKeyController = TextEditingController(text: settings.apiKey);
-    _baseUrlController = TextEditingController(text: settings.baseUrl);
+    _syncProfileControllers(settings.activeProfile());
   }
 
   @override
   void dispose() {
-    _apiKeyController.dispose();
-    _baseUrlController.dispose();
+    _profileNameController.dispose();
+    _profileApiKeyController.dispose();
+    _profileBaseUrlController.dispose();
+    _profileChatBaseUrlController.dispose();
     super.dispose();
   }
 
@@ -39,6 +42,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   Widget build(BuildContext context) {
     final settings = ref.watch(settingsProvider);
     final notifier = ref.read(settingsProvider.notifier);
+    final profile = settings.activeProfile();
 
     return Scaffold(
       appBar: AppBar(
@@ -49,79 +53,143 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            // API 配置
+            // API 配置集
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'API 配置',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                      ),
+                    Row(
+                      children: [
+                        const Expanded(
+                          child: Text(
+                            'API 配置集',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          onPressed: () => _showAddProfileDialog(notifier),
+                          icon: const Icon(Icons.add),
+                          tooltip: '新增配置',
+                        ),
+                      ],
                     ),
+                    const SizedBox(height: 12),
+                    if (settings.apiProfiles.isEmpty)
+                      const Text('暂无配置，请新增')
+                    else
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: settings.apiProfiles.map((item) {
+                          final isActive = profile != null && profile.id == item.id;
+                          return ChoiceChip(
+                            label: Text(item.name),
+                            selected: isActive,
+                            onSelected: (selected) {
+                              if (selected) {
+                                notifier.switchProfile(item.id);
+                                _syncProfileControllers(item);
+                              }
+                            },
+                          );
+                        }).toList(),
+                      ),
                     const SizedBox(height: 16),
 
-                    // API Key
-                    TextFormField(
-                      controller: _apiKeyController,
-                      obscureText: _obscureApiKey,
-                      decoration: InputDecoration(
-                        labelText: 'API Key',
-                        hintText: '输入你的 API Key',
-                        suffixIcon: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            IconButton(
-                              icon: Icon(
-                                _obscureApiKey
-                                    ? Icons.visibility
-                                    : Icons.visibility_off,
+                    if (profile != null) ...[
+                      // 配置名称
+                      TextFormField(
+                        controller: _profileNameController,
+                        decoration: const InputDecoration(
+                          labelText: '配置名称',
+                          hintText: '例如：默认配置',
+                        ),
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return '请输入配置名称';
+                          }
+                          return null;
+                        },
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      // API Key
+                      TextFormField(
+                        controller: _profileApiKeyController,
+                        obscureText: _obscureApiKey,
+                        decoration: InputDecoration(
+                          labelText: 'API Key',
+                          hintText: '输入你的 API Key',
+                          suffixIcon: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                icon: Icon(
+                                  _obscureApiKey
+                                      ? Icons.visibility
+                                      : Icons.visibility_off,
+                                ),
+                                onPressed: () {
+                                  setState(() => _obscureApiKey = !_obscureApiKey);
+                                },
                               ),
-                              onPressed: () {
-                                setState(() => _obscureApiKey = !_obscureApiKey);
-                              },
-                            ),
-                          ],
+                            ],
+                          ),
+                        ),
+                        validator: Validators.validateApiKey,
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      // Base URL
+                      TextFormField(
+                        controller: _profileBaseUrlController,
+                        decoration: const InputDecoration(
+                          labelText: 'Base URL',
+                          hintText: 'https://jeniya.cn',
+                        ),
+                        validator: Validators.validateBaseUrl,
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      // Chat Base URL
+                      TextFormField(
+                        controller: _profileChatBaseUrlController,
+                        decoration: const InputDecoration(
+                          labelText: '对话 Base URL（可选）',
+                          hintText: '留空则自动从 Base URL 推导',
                         ),
                       ),
-                      validator: Validators.validateApiKey,
-                      onSaved: (value) {
-                        if (value != null) {
-                          notifier.setApiKey(value);
-                        }
-                      },
-                    ),
 
-                    const SizedBox(height: 16),
+                      const SizedBox(height: 16),
 
-                    // Base URL
-                    TextFormField(
-                      controller: _baseUrlController,
-                      decoration: const InputDecoration(
-                        labelText: 'Base URL',
-                        hintText: 'https://jeniya.cn',
+                      Row(
+                        children: [
+                          Expanded(
+                            child: ElevatedButton(
+                              onPressed: () => _saveProfile(notifier, profile),
+                              child: const Text('保存当前配置'),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          if (settings.apiProfiles.length > 1)
+                            ElevatedButton(
+                              onPressed: () => _showRemoveProfileDialog(notifier, profile),
+                              style: ElevatedButton.styleFrom(
+                                foregroundColor: Theme.of(context).colorScheme.error,
+                              ),
+                              child: const Text('删除配置'),
+                            ),
+                        ],
                       ),
-                      validator: Validators.validateBaseUrl,
-                      onSaved: (value) {
-                        if (value != null) {
-                          notifier.setBaseUrl(value);
-                        }
-                      },
-                    ),
-
-                    const SizedBox(height: 16),
-
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: _saveApiConfig,
-                        child: const Text('保存'),
-                      ),
-                    ),
+                    ],
                   ],
                 ),
               ),
@@ -352,9 +420,31 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     );
   }
 
-  void _saveApiConfig() {
+  void _syncProfileControllers(ApiProfile? profile) {
+    if (profile == null) {
+      _profileNameController.text = '';
+      _profileApiKeyController.text = '';
+      _profileBaseUrlController.text = ApiConfig.defaultBaseUrl;
+      _profileChatBaseUrlController.text = '';
+      return;
+    }
+    _profileNameController.text = profile.name;
+    _profileApiKeyController.text = profile.apiKey;
+    _profileBaseUrlController.text = profile.baseUrl;
+    _profileChatBaseUrlController.text = profile.chatBaseUrl ?? '';
+  }
+
+  void _saveProfile(SettingsNotifier notifier, ApiProfile profile) {
     if (_formKey.currentState?.validate() ?? false) {
-      _formKey.currentState?.save();
+      final updated = profile.copyWith(
+        name: _profileNameController.text.trim(),
+        apiKey: _profileApiKeyController.text,
+        baseUrl: _profileBaseUrlController.text.trim(),
+        chatBaseUrl: _profileChatBaseUrlController.text.trim().isEmpty
+            ? null
+            : _profileChatBaseUrlController.text.trim(),
+      );
+      notifier.updateProfile(updated);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('API 配置已保存'),
@@ -362,6 +452,81 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         ),
       );
     }
+  }
+
+  void _showAddProfileDialog(SettingsNotifier notifier) {
+    final nameController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('新增 API 配置'),
+        content: TextField(
+          controller: nameController,
+          decoration: const InputDecoration(
+            labelText: '配置名称',
+            hintText: '例如：备用配置',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () async {
+              final name = nameController.text.trim();
+              if (name.isEmpty) return;
+              await notifier.addProfile(name);
+              if (mounted) {
+                final settings = ref.read(settingsProvider);
+                _syncProfileControllers(settings.activeProfile());
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('已新增配置'),
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+              }
+            },
+            child: const Text('确定'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showRemoveProfileDialog(SettingsNotifier notifier, ApiProfile profile) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('删除配置'),
+        content: Text('确定要删除「${profile.name}」吗？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () async {
+              await notifier.removeProfile(profile.id);
+              if (mounted) {
+                final settings = ref.read(settingsProvider);
+                _syncProfileControllers(settings.activeProfile());
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('配置已删除'),
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+              }
+            },
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _showClearSettingsDialog(SettingsNotifier notifier) {
@@ -378,8 +543,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           TextButton(
             onPressed: () {
               notifier.clearAll();
-              _apiKeyController.clear();
-              _baseUrlController.text = ApiConfig.defaultBaseUrl;
+              final settings = ref.read(settingsProvider);
+              _syncProfileControllers(settings.activeProfile());
               Navigator.pop(context);
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(

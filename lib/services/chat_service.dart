@@ -1,35 +1,48 @@
+import 'dart:async';
 import 'package:dio/dio.dart';
-import '../models/chat/chat_models.dart';
-import '../config/api_config.dart';
-import '../models/network_log.dart';
+import '../../config/api_config.dart';
+import '../../models/chat/chat_models.dart';
+import '../../models/network_log.dart';
+import '../../exceptions/app_exception.dart';
 
-/// 网络日志回调
 typedef LogCallback = void Function(NetworkLog log);
 
 class ChatService {
   final Dio _dio;
-  final String _baseUrl;
-  String? _apiKey;
+  String _baseUrl;
   LogCallback? _onLog;
   final Map<String, DateTime> _requestTimestamps = {};
 
   ChatService({
     required Dio dio,
     String? baseUrl,
+    String? apiKey,
     LogCallback? onLog,
   })  : _dio = dio,
         _baseUrl = baseUrl ?? ApiConfig.chatBaseUrl,
-        _onLog = onLog;
+        _onLog = onLog {
+    if (apiKey != null && apiKey.isNotEmpty) {
+      _dio.options.headers['Authorization'] = 'Bearer $apiKey';
+    }
+  }
 
   void updateApiKey(String? apiKey) {
-    _apiKey = apiKey;
+    if (apiKey != null && apiKey.isNotEmpty) {
+      _dio.options.headers['Authorization'] = 'Bearer $apiKey';
+    } else {
+      _dio.options.headers.remove('Authorization');
+    }
+  }
+
+  void updateBaseUrl(String baseUrl) {
+    _baseUrl = baseUrl;
+    _dio.options.baseUrl = baseUrl;
   }
 
   void setLogCallback(LogCallback? callback) {
     _onLog = callback;
   }
 
-  /// 发送对话请求
   Future<ChatResponse> sendMessage({
     required String model,
     required List<Map<String, String>> messages,
@@ -46,7 +59,6 @@ class ChatService {
     final requestId = '$url/${DateTime.now().millisecondsSinceEpoch}';
     _requestTimestamps[requestId] = DateTime.now();
 
-    // 记录请求日志
     _onLog?.call(
       NetworkLog(
         id: requestId,
@@ -54,10 +66,7 @@ class ChatService {
         timestamp: DateTime.now(),
         method: 'POST',
         url: url,
-        headers: {
-          'Authorization': 'Bearer ${_apiKey ?? ''}',
-          'Content-Type': 'application/json',
-        },
+        headers: Map<String, dynamic>.from(_dio.options.headers),
         data: request.toJson(),
       ),
     );
@@ -66,16 +75,9 @@ class ChatService {
       final response = await _dio.post(
         url,
         data: request.toJson(),
-        options: Options(
-          headers: {
-            'Authorization': 'Bearer $_apiKey',
-            'Content-Type': 'application/json',
-          },
-        ),
         cancelToken: cancelToken,
       );
 
-      // 记录响应日志
       final startTime = _requestTimestamps.remove(requestId);
       final duration = startTime != null ? DateTime.now().difference(startTime) : null;
       _onLog?.call(
@@ -93,7 +95,6 @@ class ChatService {
 
       return ChatResponse.fromJson(response.data as Map<String, dynamic>);
     } on DioException catch (e) {
-      // 记录错误日志
       final startTime = _requestTimestamps.remove(requestId);
       final duration = startTime != null ? DateTime.now().difference(startTime) : null;
       _onLog?.call(
@@ -108,7 +109,34 @@ class ChatService {
           duration: duration,
         ),
       );
-      rethrow;
+
+      if (e.type == DioExceptionType.cancel) {
+        throw CancelException();
+      }
+
+      throw ApiException(
+        e.message ?? '网络请求失败',
+        statusCode: e.response?.statusCode,
+        code: _errorCode(e.type),
+      );
+    } catch (e) {
+      throw ApiException(
+        e.toString(),
+        code: 'UNKNOWN',
+      );
     }
+  }
+
+  String _errorCode(DioExceptionType type) {
+    return switch (type) {
+      DioExceptionType.connectionTimeout ||
+      DioExceptionType.sendTimeout ||
+      DioExceptionType.receiveTimeout =>
+        'TIMEOUT',
+      DioExceptionType.connectionError => 'CONNECTION_ERROR',
+      DioExceptionType.badResponse => 'BAD_RESPONSE',
+      DioExceptionType.cancel => 'CANCEL',
+      _ => 'UNKNOWN',
+    };
   }
 }

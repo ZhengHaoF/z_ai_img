@@ -1,14 +1,18 @@
-import 'dart:typed_data';
-
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../config/api_config.dart';
+import '../../core/state/base_state.dart';
 import '../../models/image_result.dart';
 import '../../providers/edit_provider.dart';
 import '../../providers/settings_provider.dart';
 import '../../utils/image_utils.dart';
-import '../../utils/foreground_service.dart';  // 新增：生命周期感知
+import '../../utils/foreground_service.dart';
+import '../../widgets/common/confirm_dialog.dart';
+import '../../widgets/common/empty_state.dart';
+import '../../widgets/common/error_banner.dart';
+import '../../widgets/common/result_grid.dart';
 import '../preview/image_preview_page.dart';
 
 class EditPage extends ConsumerStatefulWidget {
@@ -19,7 +23,7 @@ class EditPage extends ConsumerStatefulWidget {
 }
 
 class _EditPageState extends ConsumerState<EditPage>
-    with WidgetsBindingObserver {  // 监听 App 生命周期
+    with WidgetsBindingObserver {
   final _promptController = TextEditingController();
   final _promptFocusNode = FocusNode();
   bool _showAdvanced = false;
@@ -44,7 +48,6 @@ class _EditPageState extends ConsumerState<EditPage>
     final editState = ref.read(editProvider);
 
     if (state == AppLifecycleState.paused) {
-      // App 进入后台，如果有正在进行的编辑，显示提示
       if (editState.isLoading) {
         ForegroundService.updateGeneratingNotification(
           title: '⏸️ 图片编辑中',
@@ -52,27 +55,46 @@ class _EditPageState extends ConsumerState<EditPage>
         );
       }
     } else if (state == AppLifecycleState.resumed) {
-      // App 回到前台，如果之前在编辑但现在失败了，给出提示
-      if (editState.status == EditStatus.error) {
-        final errorMsg = editState.errorMessage ?? '';
-        if (errorMsg.contains('连接') || errorMsg.contains('timeout') || errorMsg.contains('Socket')) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Text('⚠️ 由于切后台，编辑任务可能已中断。是否重新尝试？'),
-              action: SnackBarAction(
-                label: '重试',
-                onPressed: () {
-                  final notifier = ref.read(editProvider.notifier);
-                  notifier.edit();
-                },
-              ),
-              behavior: SnackBarBehavior.floating,
-              duration: const Duration(seconds: 5),
+      final error = editState.errorMessage;
+      if (error != null && _isBackgroundInterruptedError(error, editState.operation)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('⚠️ 由于切后台，编辑任务可能已中断。是否重新尝试？'),
+            action: SnackBarAction(
+              label: '重试',
+              onPressed: () {
+                final notifier = ref.read(editProvider.notifier);
+                notifier.edit();
+              },
             ),
-          );
-        }
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 5),
+          ),
+        );
       }
     }
+  }
+
+  bool _isBackgroundInterruptedError(String error, OperationState<List<ImageResult>> operation) {
+    final normalized = error.toLowerCase();
+    if (normalized.contains('connection') ||
+        normalized.contains('timeout') ||
+        normalized.contains('socket') ||
+        normalized.contains('网络') ||
+        normalized.contains('连接')) {
+      return true;
+    }
+
+    if (operation is ErrorState<List<ImageResult>> &&
+        operation.error is DioException) {
+      final exception = operation.error as DioException;
+      return exception.type == DioExceptionType.connectionTimeout ||
+          exception.type == DioExceptionType.receiveTimeout ||
+          exception.type == DioExceptionType.connectionError ||
+          exception.type == DioExceptionType.sendTimeout;
+    }
+
+    return false;
   }
 
   @override
@@ -85,10 +107,12 @@ class _EditPageState extends ConsumerState<EditPage>
       body: SafeArea(
         child: Column(
           children: [
-            // 进度条
             if (state.isLoading)
               LinearProgressIndicator(
-                value: state.progress > 0 ? state.progress : null,
+                value: switch (state.operation) {
+                  LoadingState<List<ImageResult>>(:final double? progress) => (progress != null && progress > 0) ? progress : null,
+                  _ => null,
+                },
                 backgroundColor: Colors.transparent,
               ),
 
@@ -98,33 +122,18 @@ class _EditPageState extends ConsumerState<EditPage>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // 图片选择区
                     _buildImageSection(state, notifier),
-
                     const SizedBox(height: 16),
-
-                    // 提示词输入
                     _buildPromptInput(state, notifier),
-
                     const SizedBox(height: 16),
-
-                    // 基础参数
                     _buildBasicParams(state, notifier),
-
-                    // 高级参数
                     if (_showAdvanced) ...[
                       const SizedBox(height: 16),
                       _buildAdvancedParams(state, notifier),
                     ],
-
                     const SizedBox(height: 16),
-
-                    // 编辑按钮
                     _buildEditButton(state, notifier, settings),
-
                     const SizedBox(height: 16),
-
-                    // 结果展示
                     _buildResults(state, notifier),
                   ],
                 ),
@@ -153,8 +162,6 @@ class _EditPageState extends ConsumerState<EditPage>
               style: TextStyle(color: Colors.grey, fontSize: 12),
             ),
             const SizedBox(height: 12),
-
-            // 图片预览列表
             if (state.hasSourceImages) ...[
               SizedBox(
                 height: 100,
@@ -202,8 +209,6 @@ class _EditPageState extends ConsumerState<EditPage>
               ),
               const SizedBox(height: 12),
             ],
-
-            // 添加图片按钮
             Row(
               children: [
                 OutlinedButton.icon(
@@ -221,12 +226,9 @@ class _EditPageState extends ConsumerState<EditPage>
                 ),
               ],
             ),
-
             const SizedBox(height: 16),
             const Divider(),
             const SizedBox(height: 8),
-
-            // 遮罩图片（可选）
             const Text(
               '遮罩图片（可选）',
               style: TextStyle(fontWeight: FontWeight.bold),
@@ -237,7 +239,6 @@ class _EditPageState extends ConsumerState<EditPage>
               style: TextStyle(color: Colors.grey, fontSize: 12),
             ),
             const SizedBox(height: 12),
-
             if (state.maskImage != null) ...[
               ClipRRect(
                 borderRadius: BorderRadius.circular(8),
@@ -313,9 +314,7 @@ class _EditPageState extends ConsumerState<EditPage>
               icon: Icon(_showAdvanced ? Icons.expand_less : Icons.expand_more),
               label: Text(_showAdvanced ? '收起设置' : '更多设置'),
             ),
-
             const SizedBox(height: 8),
-
             Row(
               children: [
                 Expanded(
@@ -392,8 +391,6 @@ class _EditPageState extends ConsumerState<EditPage>
               style: TextStyle(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 12),
-
-            // 模型选择
             DropdownButtonFormField<String>(
               value: state.model,
               decoration: const InputDecoration(labelText: '模型'),
@@ -406,9 +403,7 @@ class _EditPageState extends ConsumerState<EditPage>
                       if (value != null) notifier.updateModel(value);
                     },
             ),
-
             const SizedBox(height: 12),
-
             Row(
               children: [
                 Expanded(
@@ -443,9 +438,7 @@ class _EditPageState extends ConsumerState<EditPage>
                 ),
               ],
             ),
-
             const SizedBox(height: 12),
-
             DropdownButtonFormField<String?>(
               value: state.moderation,
               decoration: const InputDecoration(labelText: '内容过滤级别'),
@@ -505,7 +498,6 @@ class _EditPageState extends ConsumerState<EditPage>
     );
   }
 
-  /// 编辑按钮点击处理
   Future<void> _onEditPressed(
     BuildContext context,
     EditNotifier notifier,
@@ -515,21 +507,26 @@ class _EditPageState extends ConsumerState<EditPage>
   }
 
   Widget _buildResults(EditState state, EditNotifier notifier) {
-    // 没有任何图片且空闲 → 显示空状态引导
-    if (!state.hasImages && state.status == EditStatus.idle) {
-      return _buildEmptyState();
+    final images = state.images;
+
+    if (images == null || images.isEmpty) {
+      if (state.isLoading) {
+        return const SizedBox.shrink();
+      }
+
+      if (state.operation is ErrorState<List<ImageResult>>) {
+        return _buildErrorState(state.errorMessage);
+      }
+
+      return const EmptyState(
+        icon: Icons.photo_library_outlined,
+        title: '选择一张或多张图片，开始 AI 编辑',
+      );
     }
 
-    // 没有任何图片但有错误 → 只显示错误
-    if (!state.hasImages && state.status == EditStatus.error) {
-      return _buildErrorState(state.errorMessage);
-    }
-
-    // 有图片 → 始终显示图片网格
     final children = <Widget>[];
 
-    // 在图片上方始终显示错误横幅（如果有错误）
-    if (state.status == EditStatus.error) {
+    if (state.operation is ErrorState<List<ImageResult>>) {
       children.add(_buildErrorState(state.errorMessage));
       children.add(const SizedBox(height: 12));
     }
@@ -550,55 +547,9 @@ class _EditPageState extends ConsumerState<EditPage>
         ],
       ),
       const SizedBox(height: 8),
-      GridView.builder(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2,
-          crossAxisSpacing: 8,
-          mainAxisSpacing: 8,
-        ),
-        itemCount: state.images.length,
-        itemBuilder: (context, index) {
-          final image = state.images[index];
-          return GestureDetector(
-            onTap: () => _openPreview(index, state.images),
-            child: Card(
-              clipBehavior: Clip.antiAlias,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  Image.memory(
-                    image.imageData,
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) {
-                      return Container(
-                        color: Theme.of(context).colorScheme.errorContainer,
-                        child: Icon(
-                          Icons.broken_image,
-                          color: Theme.of(context).colorScheme.error,
-                          size: 32,
-                        ),
-                      );
-                    },
-                  ),
-                  Positioned(
-                    right: 4,
-                    bottom: 4,
-                    child: IconButton(
-                      icon: const Icon(Icons.save_alt),
-                      style: IconButton.styleFrom(
-                        backgroundColor: Colors.black54,
-                        foregroundColor: Colors.white,
-                      ),
-                      onPressed: () => _saveImage(image.imageData),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
+      ResultGrid(
+        images: images,
+        onItemTap: (index) => _openPreview(index, images),
       ),
     ]);
 
@@ -609,73 +560,26 @@ class _EditPageState extends ConsumerState<EditPage>
   }
 
   Widget _buildEmptyState() {
-    return Container(
-      padding: const EdgeInsets.all(32),
-      child: Column(
-        children: [
-          Icon(
-            Icons.photo_library_outlined,
-            size: 64,
-            color: Theme.of(context).colorScheme.outline,
-          ),
-          const SizedBox(height: 16),
-          Text(
-            '选择一张或多张图片，开始 AI 编辑',
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  color: Theme.of(context).colorScheme.outline,
-                ),
-            textAlign: TextAlign.center,
-          ),
-        ],
-      ),
+    return const EmptyState(
+      icon: Icons.photo_library_outlined,
+      title: '选择一张或多张图片，开始 AI 编辑',
     );
   }
 
   Widget _buildErrorState(String? message) {
     final errorText = message ?? '发生错误';
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.errorContainer,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(
-            Icons.error_outline,
-            color: Theme.of(context).colorScheme.error,
+    return ErrorBanner(
+      message: errorText,
+      onCopy: () {
+        Clipboard.setData(ClipboardData(text: errorText));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('已复制到剪贴板'),
+            behavior: SnackBarBehavior.floating,
+            duration: Duration(seconds: 1),
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              errorText,
-              style: TextStyle(
-                color: Theme.of(context).colorScheme.onErrorContainer,
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          IconButton(
-            icon: Icon(
-              Icons.copy,
-              size: 18,
-              color: Theme.of(context).colorScheme.onErrorContainer,
-            ),
-            tooltip: '复制错误信息',
-            onPressed: () {
-              Clipboard.setData(ClipboardData(text: errorText));
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('已复制到剪贴板'),
-                  behavior: SnackBarBehavior.floating,
-                  duration: Duration(seconds: 1),
-                ),
-              );
-            },
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -706,22 +610,10 @@ class _EditPageState extends ConsumerState<EditPage>
   }
 
   Future<void> _onClearPressed() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('确认清除'),
-        content: const Text('确定要清空所有已编辑的图片吗？'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('取消'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('确定'),
-          ),
-        ],
-      ),
+    final confirmed = await showConfirmDialog(
+      context,
+      title: '确认清除',
+      content: '确定要清空所有已编辑的图片吗？',
     );
 
     if (confirmed == true && mounted) {

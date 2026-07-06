@@ -1,25 +1,20 @@
 import 'dart:typed_data';
 import 'package:dio/dio.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/foundation.dart';
-import 'dart:io';
-import '../config/api_config.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/edit/edit_request.dart';
 import '../models/image_result.dart';
-import '../providers/settings_provider.dart';
+import 'settings_provider.dart';
 import '../repositories/image_repository.dart';
 import '../utils/foreground_service.dart';
 import '../utils/native_foreground_service.dart';
-
-// Edit state
-enum EditStatus { idle, loading, uploading, success, error }
+import '../core/state/base_state.dart';
+import '../core/platform/platform_capabilities.dart';
 
 class EditState {
-  final EditStatus status;
-  final List<ImageResult> images;
+  final OperationState<List<ImageResult>> operation;
   final List<Uint8List> sourceImages;
   final Uint8List? maskImage;
-  final String? errorMessage;
   final String prompt;
   final String model;
   final String size;
@@ -27,14 +22,11 @@ class EditState {
   final String? background;
   final String? moderation;
   final int n;
-  final double progress;
 
   const EditState({
-    this.status = EditStatus.idle,
-    this.images = const [],
+    this.operation = const OperationState.idle(),
     this.sourceImages = const [],
     this.maskImage,
-    this.errorMessage,
     this.prompt = '',
     this.model = 'gpt-image-2',
     this.size = '1024x1024',
@@ -42,15 +34,13 @@ class EditState {
     this.background,
     this.moderation,
     this.n = 1,
-    this.progress = 0,
   });
 
   EditState copyWith({
-    EditStatus? status,
-    List<ImageResult>? images,
+    OperationState<List<ImageResult>>? operation,
     List<Uint8List>? sourceImages,
     Uint8List? maskImage,
-    String? errorMessage,
+    bool clearMask = false,
     String? prompt,
     String? model,
     String? size,
@@ -58,15 +48,11 @@ class EditState {
     String? background,
     String? moderation,
     int? n,
-    double? progress,
-    bool clearMask = false,
   }) {
     return EditState(
-      status: status ?? this.status,
-      images: images ?? this.images,
+      operation: operation ?? this.operation,
       sourceImages: sourceImages ?? this.sourceImages,
       maskImage: clearMask ? null : (maskImage ?? this.maskImage),
-      errorMessage: errorMessage,
       prompt: prompt ?? this.prompt,
       model: model ?? this.model,
       size: size ?? this.size,
@@ -74,31 +60,83 @@ class EditState {
       background: background ?? this.background,
       moderation: moderation ?? this.moderation,
       n: n ?? this.n,
-      progress: progress ?? this.progress,
     );
   }
 
-  bool get isLoading => status == EditStatus.loading || status == EditStatus.uploading;
-  bool get hasImages => images.isNotEmpty;
+  bool get isLoading => operation.isLoading;
+  bool get hasImages => _successImages.isNotEmpty;
   bool get hasSourceImages => sourceImages.isNotEmpty;
-}
 
-// Edit notifier
-class EditNotifier extends StateNotifier<EditState> {
-  final ImageRepository _repository;
-  final Ref _ref;
-  CancelToken? _cancelToken;
+  List<ImageResult>? get images => operation.when(
+    idle: () => null,
+    loading: (_) => null,
+    success: (data) => data,
+    error: (_, __) => null,
+  );
 
-  EditNotifier(this._repository, this._ref) : super(const EditState()) {
-    _loadDefaults();
+  List<ImageResult> get _successImages {
+    return operation.when(
+      idle: () => <ImageResult>[],
+      loading: (_) => <ImageResult>[],
+      success: (data) => data,
+      error: (_, __) => <ImageResult>[],
+    );
   }
 
-  void _loadDefaults() {
-    final settings = _ref.read(settingsProvider);
+  String? get errorMessage => operation.when(
+    idle: () => null,
+    loading: (_) => null,
+    success: (_) => null,
+    error: (message, _) => message,
+  );
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is EditState &&
+          other.operation == operation &&
+          other.sourceImages.length == sourceImages.length &&
+          other.maskImage == maskImage &&
+          other.prompt == prompt &&
+          other.model == model &&
+          other.size == size &&
+          other.quality == quality &&
+          other.background == background &&
+          other.moderation == moderation &&
+          other.n == n;
+
+  @override
+  int get hashCode => Object.hash(
+    operation,
+    sourceImages.length,
+    maskImage,
+    prompt,
+    model,
+    size,
+    quality,
+    background,
+    moderation,
+    n,
+  );
+}
+
+class EditNotifier extends StateNotifier<EditState> {
+  final ImageRepository _repository;
+  CancelToken? _cancelToken;
+
+  EditNotifier(this._repository, {
+    String model = 'gpt-image-2',
+    String size = '1024x1024',
+    int n = 1,
+  }) : super(const EditState()) {
+    _loadDefaults(model: model, size: size, n: n);
+  }
+
+  void _loadDefaults({required String model, required String size, required int n}) {
     state = state.copyWith(
-      model: settings.defaultModel,
-      size: settings.defaultSize,
-      n: settings.defaultCount,
+      model: model,
+      size: size,
+      n: n,
     );
   }
 
@@ -155,29 +193,24 @@ class EditNotifier extends StateNotifier<EditState> {
   Future<void> edit() async {
     if (!state.hasSourceImages) {
       state = state.copyWith(
-        status: EditStatus.error,
-        errorMessage: '请选择至少一张图片',
+        operation: const OperationState.error('请选择至少一张图片'),
       );
       return;
     }
 
     if (state.prompt.trim().isEmpty) {
       state = state.copyWith(
-        status: EditStatus.error,
-        errorMessage: '请输入编辑描述',
+        operation: const OperationState.error('请输入编辑描述'),
       );
       return;
     }
 
     _cancelToken = CancelToken();
     state = state.copyWith(
-      status: EditStatus.uploading,
-      errorMessage: null,
-      progress: 0,
+      operation: const OperationState.loading(progress: 0),
     );
 
-    // 启动原生前台保活服务 + 进度通知
-    if (!kIsWeb) {
+    if (PlatformCapabilities.supportsForegroundService) {
       try {
         await NativeForegroundService.start(
           title: '🖼️ 图片编辑中',
@@ -208,25 +241,23 @@ class EditNotifier extends StateNotifier<EditState> {
         moderation: state.moderation,
       );
 
-      state = state.copyWith(status: EditStatus.loading);
-
       final results = await _repository.editImage(
         request: request,
         cancelToken: _cancelToken,
         onSendProgress: (sent, total) {
           if (total > 0) {
-            state = state.copyWith(progress: sent / total);
+            state = state.copyWith(
+              operation: OperationState.loading(progress: sent / total),
+            );
           }
         },
       );
 
       state = state.copyWith(
-        status: EditStatus.success,
-        images: [...state.images, ...results],
+        operation: OperationState.success(results),
       );
 
-      // 停止保活，显示完成通知
-      if (!kIsWeb) {
+      if (PlatformCapabilities.supportsForegroundService) {
         try { await NativeForegroundService.stop(); } catch (_) {}
         try { await ForegroundService.cancelGenerating(); } catch (_) {}
         try {
@@ -238,26 +269,21 @@ class EditNotifier extends StateNotifier<EditState> {
       }
     } on DioException catch (e) {
       if (e.type == DioExceptionType.cancel) {
-        state = state.copyWith(
-          status: EditStatus.idle,
-          errorMessage: null,
-        );
+        state = const EditState();
       } else {
         state = state.copyWith(
-          status: EditStatus.error,
-          errorMessage: e.message ?? '编辑失败',
+          operation: OperationState.error(e.message ?? '编辑失败', error: e),
         );
       }
-      if (!kIsWeb) {
+      if (PlatformCapabilities.supportsForegroundService) {
         try { await NativeForegroundService.stop(); } catch (_) {}
         try { await ForegroundService.cancelGenerating(); } catch (_) {}
       }
     } catch (e) {
       state = state.copyWith(
-        status: EditStatus.error,
-        errorMessage: e.toString(),
+        operation: OperationState.error(e.toString(), error: e),
       );
-      if (!kIsWeb) {
+      if (PlatformCapabilities.supportsForegroundService) {
         try { await NativeForegroundService.stop(); } catch (_) {}
         try { await ForegroundService.cancelGenerating(); } catch (_) {}
       }
@@ -267,8 +293,7 @@ class EditNotifier extends StateNotifier<EditState> {
   void cancel() {
     _cancelToken?.cancel();
     _cancelToken = null;
-    // 取消时也停止保活
-    if (!kIsWeb) {
+    if (PlatformCapabilities.supportsForegroundService) {
       NativeForegroundService.stop();
       ForegroundService.cancelGenerating();
     }
@@ -277,19 +302,24 @@ class EditNotifier extends StateNotifier<EditState> {
   void reset() {
     cancel();
     state = const EditState();
-    _loadDefaults();
   }
 
   void clearImages() {
+    final current = state.images;
+    if (current == null || current.isEmpty) return;
     state = state.copyWith(
-      images: [],
-      status: EditStatus.idle,
+      operation: const OperationState.idle(),
     );
   }
 }
 
-// Edit provider
 final editProvider = StateNotifierProvider<EditNotifier, EditState>((ref) {
   final repository = ref.watch(imageRepositoryProvider);
-  return EditNotifier(repository, ref);
+  final settings = ref.watch(settingsProvider);
+  return EditNotifier(
+    repository,
+    model: settings.defaultModel,
+    size: settings.defaultSize,
+    n: settings.defaultCount,
+  );
 });

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:tray_manager/tray_manager.dart';
+import '../core/platform/platform_capabilities.dart';
 
 /// 系统托盘管理器 - Windows/Mac/Linux 平台专用
 ///
@@ -28,7 +29,7 @@ class SystemTrayManager with TrayListener {
     VoidCallback? onCancelTask,
     VoidCallback? onQuit,
   }) async {
-    if (_isInitialized || !Platform.isWindows && !Platform.isMacOS && !Platform.isLinux) {
+    if (_isInitialized || !PlatformCapabilities.supportsSystemTray) {
       return;
     }
 
