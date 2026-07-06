@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:z_ai/models/chat/chat_models.dart';
 import 'package:z_ai/providers/chat_provider.dart';
 import 'package:z_ai/services/chat_service.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class _FakeChatService extends ChatService {
   _FakeChatService() : super(dio: Dio(BaseOptions(baseUrl: 'https://example.com')), baseUrl: 'https://example.com');
@@ -41,7 +42,8 @@ void main() {
   });
 
   test('sendMessage 应在成功时添加消息', () async {
-    final chatNotifier = ChatNotifier(_FakeChatService());
+    final container = ProviderContainer();
+    final chatNotifier = ChatNotifier(_FakeChatService(), container);
     await chatNotifier.sendMessage('Hi');
 
     expect(chatNotifier.state.messages.length, 2);
@@ -51,7 +53,8 @@ void main() {
   });
 
   test('clearChat 应清空对话', () async {
-    final chatNotifier = ChatNotifier(_FakeChatService());
+    final container = ProviderContainer();
+    final chatNotifier = ChatNotifier(_FakeChatService(), container);
     await chatNotifier.sendMessage('Hi');
     await chatNotifier.clearChat();
 
@@ -60,7 +63,8 @@ void main() {
   });
 
   test('deleteMessage 应删除指定消息', () async {
-    final chatNotifier = ChatNotifier(_FakeChatService());
+    final container = ProviderContainer();
+    final chatNotifier = ChatNotifier(_FakeChatService(), container);
     await chatNotifier.sendMessage('Hi');
     final messageId = chatNotifier.state.messages.first.id;
     await chatNotifier.deleteMessage(messageId);
@@ -70,7 +74,8 @@ void main() {
   });
 
   test('clearError 应清空错误', () async {
-    final chatNotifier = ChatNotifier(_FakeChatService());
+    final container = ProviderContainer();
+    final chatNotifier = ChatNotifier(_FakeChatService(), container);
     chatNotifier.state = chatNotifier.state.copyWith(error: 'error');
     chatNotifier.clearError();
     expect(chatNotifier.state.error, isNull);

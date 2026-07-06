@@ -25,9 +25,6 @@ final imageStorageProvider = Provider<ImageStorage>((ref) {
 class SettingsState {
   final List<ApiProfile> apiProfiles;
   final String activeProfileId;
-  final String defaultModel;
-  final String defaultSize;
-  final int defaultCount;
   final bool isDarkMode;
 
   // 托盘设置
@@ -36,9 +33,6 @@ class SettingsState {
   SettingsState({
     List<ApiProfile>? apiProfiles,
     String? activeProfileId,
-    this.defaultModel = 'gpt-image-2',
-    this.defaultSize = '1024x1024',
-    this.defaultCount = 1,
     this.isDarkMode = false,
     this.showTrayIcon = false,
   })  : apiProfiles = apiProfiles ?? const [],
@@ -47,18 +41,12 @@ class SettingsState {
   SettingsState copyWith({
     List<ApiProfile>? apiProfiles,
     String? activeProfileId,
-    String? defaultModel,
-    String? defaultSize,
-    int? defaultCount,
     bool? isDarkMode,
     bool? showTrayIcon,
   }) {
     return SettingsState(
       apiProfiles: apiProfiles ?? this.apiProfiles,
       activeProfileId: activeProfileId ?? this.activeProfileId,
-      defaultModel: defaultModel ?? this.defaultModel,
-      defaultSize: defaultSize ?? this.defaultSize,
-      defaultCount: defaultCount ?? this.defaultCount,
       isDarkMode: isDarkMode ?? this.isDarkMode,
       showTrayIcon: showTrayIcon ?? this.showTrayIcon,
     );
@@ -123,9 +111,6 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
     state = SettingsState(
       apiProfiles: profiles,
       activeProfileId: activeProfileId,
-      defaultModel: _prefs.getString('defaultModel') ?? 'gpt-image-2',
-      defaultSize: _prefs.getString('defaultSize') ?? '1024x1024',
-      defaultCount: _prefs.getInt('defaultCount') ?? 1,
       isDarkMode: _prefs.getBool('isDarkMode') ?? false,
       showTrayIcon: _prefs.getBool('showTrayIcon') ?? false,
     );
@@ -162,21 +147,6 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
     final activeId = updated.id;
     await _persistProfiles(profiles, activeProfileId: activeId);
     state = state.copyWith(apiProfiles: profiles, activeProfileId: activeId);
-  }
-
-  Future<void> setDefaultModel(String value) async {
-    await _prefs.setString('defaultModel', value);
-    state = state.copyWith(defaultModel: value);
-  }
-
-  Future<void> setDefaultSize(String value) async {
-    await _prefs.setString('defaultSize', value);
-    state = state.copyWith(defaultSize: value);
-  }
-
-  Future<void> setDefaultCount(int value) async {
-    await _prefs.setInt('defaultCount', value);
-    state = state.copyWith(defaultCount: value);
   }
 
   Future<void> setDarkMode(bool value) async {
@@ -252,9 +222,6 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
     state = SettingsState(
       apiProfiles: [ApiConfig.defaultProfile()],
       activeProfileId: ApiConfig.defaultProfile().id,
-      defaultModel: 'gpt-image-2',
-      defaultSize: '1024x1024',
-      defaultCount: 1,
       isDarkMode: false,
       showTrayIcon: false,
     );

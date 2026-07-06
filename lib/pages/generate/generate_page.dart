@@ -3,11 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../config/api_config.dart';
-import '../../core/state/base_state.dart';
 import '../../models/image_result.dart';
 import '../../providers/generate_provider.dart';
 import '../../providers/settings_provider.dart';
-import '../../utils/image_utils.dart';
 import '../../utils/foreground_service.dart';
 import '../../widgets/common/confirm_dialog.dart';
 import '../../widgets/common/empty_state.dart';
@@ -27,6 +25,7 @@ class _GeneratePageState extends ConsumerState<GeneratePage>
   final _promptController = TextEditingController();
   final _promptFocusNode = FocusNode();
   bool _showAdvanced = false;
+  CancelToken? _cancelToken;
 
   @override
   void initState() {
@@ -39,6 +38,7 @@ class _GeneratePageState extends ConsumerState<GeneratePage>
     WidgetsBinding.instance.removeObserver(this);
     _promptController.dispose();
     _promptFocusNode.dispose();
+    _cancelToken?.cancel('页面销毁');
     super.dispose();
   }
 
@@ -55,16 +55,22 @@ class _GeneratePageState extends ConsumerState<GeneratePage>
         );
       }
     } else if (state == AppLifecycleState.resumed) {
-      final error = genState.errorMessage;
-      if (error != null && _isBackgroundInterruptedError(error, genState.operation)) {
+      final error = genState.error;
+      if (error != null && _isBackgroundInterruptedError(error)) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: const Text('⚠️ 由于切后台，生成任务可能已中断。是否重新尝试？'),
             action: SnackBarAction(
               label: '重试',
               onPressed: () {
-                final notifier = ref.read(generateProvider.notifier);
-                notifier.generate();
+                final prompt = _promptController.text.trim();
+                if (prompt.isNotEmpty) {
+                  _cancelToken = CancelToken();
+                  ref.read(generateProvider.notifier).generateImage(
+                    prompt: prompt,
+                    cancelToken: _cancelToken,
+                  );
+                }
               },
             ),
             behavior: SnackBarBehavior.floating,
@@ -75,26 +81,13 @@ class _GeneratePageState extends ConsumerState<GeneratePage>
     }
   }
 
-  bool _isBackgroundInterruptedError(String error, OperationState<List<ImageResult>> operation) {
+  bool _isBackgroundInterruptedError(String error) {
     final normalized = error.toLowerCase();
-    if (normalized.contains('connection') ||
+    return normalized.contains('connection') ||
         normalized.contains('timeout') ||
         normalized.contains('socket') ||
         normalized.contains('网络') ||
-        normalized.contains('连接')) {
-      return true;
-    }
-
-    if (operation is ErrorState<List<ImageResult>> &&
-        operation.error is DioException) {
-      final exception = operation.error as DioException;
-      return exception.type == DioExceptionType.connectionTimeout ||
-          exception.type == DioExceptionType.receiveTimeout ||
-          exception.type == DioExceptionType.connectionError ||
-          exception.type == DioExceptionType.sendTimeout;
-    }
-
-    return false;
+        normalized.contains('连接');
   }
 
   @override
@@ -102,17 +95,14 @@ class _GeneratePageState extends ConsumerState<GeneratePage>
     final state = ref.watch(generateProvider);
     final settings = ref.watch(settingsProvider);
     final notifier = ref.read(generateProvider.notifier);
+    final profile = settings.activeProfile() ?? ApiConfig.defaultProfile();
 
     return Scaffold(
       body: SafeArea(
         child: Column(
           children: [
             if (state.isLoading)
-              LinearProgressIndicator(
-                value: switch (state.operation) {
-                  LoadingState<List<ImageResult>>(:final double? progress) => (progress != null && progress > 0) ? progress : null,
-                  _ => null,
-                },
+              const LinearProgressIndicator(
                 backgroundColor: Colors.transparent,
               ),
 
@@ -124,10 +114,10 @@ class _GeneratePageState extends ConsumerState<GeneratePage>
                   children: [
                     _buildPromptInput(state, notifier),
                     const SizedBox(height: 16),
-                    _buildBasicParams(state, notifier),
+                    _buildBasicParams(state, notifier, profile),
                     if (_showAdvanced) ...[
                       const SizedBox(height: 16),
-                      _buildAdvancedParams(state, notifier),
+                      _buildAdvancedParams(state, notifier, profile),
                     ],
                     const SizedBox(height: 16),
                     _buildGenerateButton(state, notifier, settings),
@@ -159,24 +149,22 @@ class _GeneratePageState extends ConsumerState<GeneratePage>
           maxLength: ApiConfig.maxPromptLength,
           decoration: InputDecoration(
             hintText: '输入描述，开始生成你的 AI 图片',
-            suffixIcon: state.prompt.isNotEmpty
+            suffixIcon: state.prompt?.isNotEmpty ?? false
                 ? IconButton(
                     icon: const Icon(Icons.clear),
                     onPressed: () {
                       _promptController.clear();
-                      notifier.updatePrompt('');
                     },
                   )
                 : null,
           ),
-          onChanged: notifier.updatePrompt,
           enabled: !state.isLoading,
         ),
       ],
     );
   }
 
-  Widget _buildBasicParams(GenerateState state, GenerateNotifier notifier) {
+  Widget _buildBasicParams(GenerateState state, GenerateNotifier notifier, ApiProfile profile) {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -198,7 +186,7 @@ class _GeneratePageState extends ConsumerState<GeneratePage>
                       const Text('画布尺寸'),
                       const SizedBox(height: 4),
                       DropdownButton<String>(
-                        value: state.size,
+                        value: profile.defaultSize,
                         isExpanded: true,
                         items: ApiConfig.imageSizes.map((size) {
                           return DropdownMenuItem(value: size, child: Text(size));
@@ -206,7 +194,10 @@ class _GeneratePageState extends ConsumerState<GeneratePage>
                         onChanged: state.isLoading
                             ? null
                             : (value) {
-                                if (value != null) notifier.updateSize(value);
+                                if (value != null) {
+                                  final updated = profile.copyWith(defaultSize: value);
+                                  ref.read(settingsProvider.notifier).updateProfile(updated);
+                                }
                               },
                       ),
                     ],
@@ -223,19 +214,25 @@ class _GeneratePageState extends ConsumerState<GeneratePage>
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           InkWell(
-                            onTap: state.isLoading || state.n <= ApiConfig.minGenerateCount
+                            onTap: state.isLoading || profile.defaultCount <= ApiConfig.minGenerateCount
                                 ? null
-                                : () => notifier.updateN(state.n - 1),
+                                : () {
+                                    final updated = profile.copyWith(defaultCount: profile.defaultCount - 1);
+                                    ref.read(settingsProvider.notifier).updateProfile(updated);
+                                  },
                             child: const Icon(Icons.remove, size: 20),
                           ),
                           Text(
-                            '${state.n}',
+                            '${profile.defaultCount}',
                             style: const TextStyle(fontSize: 16),
                           ),
                           InkWell(
-                            onTap: state.isLoading || state.n >= ApiConfig.maxGenerateCount
+                            onTap: state.isLoading || profile.defaultCount >= ApiConfig.maxGenerateCount
                                 ? null
-                                : () => notifier.updateN(state.n + 1),
+                                : () {
+                                    final updated = profile.copyWith(defaultCount: profile.defaultCount + 1);
+                                    ref.read(settingsProvider.notifier).updateProfile(updated);
+                                  },
                             child: const Icon(Icons.add, size: 20),
                           ),
                         ],
@@ -251,7 +248,7 @@ class _GeneratePageState extends ConsumerState<GeneratePage>
     );
   }
 
-  Widget _buildAdvancedParams(GenerateState state, GenerateNotifier notifier) {
+  Widget _buildAdvancedParams(GenerateState state, GenerateNotifier notifier, ApiProfile profile) {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -264,7 +261,7 @@ class _GeneratePageState extends ConsumerState<GeneratePage>
             ),
             const SizedBox(height: 12),
             DropdownButtonFormField<String>(
-              value: state.model,
+              value: profile.defaultModel,
               decoration: const InputDecoration(labelText: '模型'),
               items: ApiConfig.generateModels.map((model) {
                 return DropdownMenuItem(value: model, child: Text(model));
@@ -272,42 +269,11 @@ class _GeneratePageState extends ConsumerState<GeneratePage>
               onChanged: state.isLoading
                   ? null
                   : (value) {
-                      if (value != null) notifier.updateModel(value);
+                      if (value != null) {
+                        final updated = profile.copyWith(defaultModel: value);
+                        ref.read(settingsProvider.notifier).updateProfile(updated);
+                      }
                     },
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: DropdownButtonFormField<String>(
-                    value: state.format,
-                    decoration: const InputDecoration(labelText: '格式'),
-                    items: ApiConfig.imageFormats.map((format) {
-                      return DropdownMenuItem(value: format, child: Text(format));
-                    }).toList(),
-                    onChanged: state.isLoading
-                        ? null
-                        : (value) {
-                            if (value != null) notifier.updateFormat(value);
-                          },
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: DropdownButtonFormField<String>(
-                    value: state.quality,
-                    decoration: const InputDecoration(labelText: '画质'),
-                    items: ApiConfig.qualityOptions.map((quality) {
-                      return DropdownMenuItem(value: quality, child: Text(quality));
-                    }).toList(),
-                    onChanged: state.isLoading
-                        ? null
-                        : (value) {
-                            if (value != null) notifier.updateQuality(value);
-                          },
-                  ),
-                ),
-              ],
             ),
           ],
         ),
@@ -328,7 +294,23 @@ class _GeneratePageState extends ConsumerState<GeneratePage>
             onPressed: state.isLoading
                 ? null
                 : (settings.hasApiKey
-                    ? () => _onGeneratePressed(context, notifier, settings)
+                    ? () {
+                        final prompt = _promptController.text.trim();
+                        if (prompt.isEmpty) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('请输入提示词'),
+                              behavior: SnackBarBehavior.floating,
+                            ),
+                          );
+                          return;
+                        }
+                        _cancelToken = CancelToken();
+                        notifier.generateImage(
+                          prompt: prompt,
+                          cancelToken: _cancelToken,
+                        );
+                      }
                     : null),
             icon: state.isLoading
                 ? const SizedBox(
@@ -347,7 +329,9 @@ class _GeneratePageState extends ConsumerState<GeneratePage>
         if (state.isLoading) ...[
           const SizedBox(height: 8),
           TextButton(
-            onPressed: notifier.cancel,
+            onPressed: () {
+              _cancelToken?.cancel('用户取消');
+            },
             child: const Text('取消'),
           ),
         ],
@@ -355,24 +339,16 @@ class _GeneratePageState extends ConsumerState<GeneratePage>
     );
   }
 
-  Future<void> _onGeneratePressed(
-    BuildContext context,
-    GenerateNotifier notifier,
-    SettingsState settings,
-  ) async {
-    await notifier.generate();
-  }
-
   Widget _buildResults(GenerateState state, GenerateNotifier notifier) {
     final images = state.images;
 
-    if (images == null || images.isEmpty) {
+    if (images.isEmpty) {
       if (state.isLoading) {
         return const SizedBox.shrink();
       }
 
-      if (state.operation is ErrorState<List<ImageResult>>) {
-        return _buildErrorState(state.errorMessage);
+      if (state.error != null) {
+        return _buildErrorState(state.error);
       }
 
       return const EmptyState(
@@ -383,8 +359,8 @@ class _GeneratePageState extends ConsumerState<GeneratePage>
 
     final children = <Widget>[];
 
-    if (state.operation is ErrorState<List<ImageResult>>) {
-      children.add(_buildErrorState(state.errorMessage));
+    if (state.error != null) {
+      children.add(_buildErrorState(state.error));
       children.add(const SizedBox(height: 12));
     }
 
@@ -413,13 +389,6 @@ class _GeneratePageState extends ConsumerState<GeneratePage>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: children,
-    );
-  }
-
-  Widget _buildEmptyState() {
-    return const EmptyState(
-      icon: Icons.image_outlined,
-      title: '输入描述，开始生成你的 AI 图片',
     );
   }
 
@@ -460,19 +429,7 @@ class _GeneratePageState extends ConsumerState<GeneratePage>
     );
 
     if (confirmed == true && mounted) {
-      ref.read(generateProvider.notifier).clearImages();
-    }
-  }
-
-  Future<void> _saveImage(Uint8List imageData) async {
-    final success = await ImageUtils.saveImage(imageData);
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(success ? '保存成功' : '保存失败'),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      ref.read(generateProvider.notifier).clearError();
     }
   }
 }

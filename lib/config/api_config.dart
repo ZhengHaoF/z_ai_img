@@ -4,6 +4,11 @@ class ApiProfile {
   final String apiKey;
   final String baseUrl;
   final String? chatBaseUrl;
+  final String defaultModel;
+  final String defaultSize;
+  final int defaultCount;
+  final String defaultChatModel;
+  final double defaultTemperature;
 
   const ApiProfile({
     required this.id,
@@ -11,6 +16,11 @@ class ApiProfile {
     required this.apiKey,
     required this.baseUrl,
     this.chatBaseUrl,
+    this.defaultModel = 'gpt-image-2',
+    this.defaultSize = '1024x1024',
+    this.defaultCount = 1,
+    this.defaultChatModel = 'gpt-4o',
+    this.defaultTemperature = 0.7,
   });
 
   ApiProfile copyWith({
@@ -19,6 +29,11 @@ class ApiProfile {
     String? apiKey,
     String? baseUrl,
     String? chatBaseUrl,
+    String? defaultModel,
+    String? defaultSize,
+    int? defaultCount,
+    String? defaultChatModel,
+    double? defaultTemperature,
   }) {
     return ApiProfile(
       id: id ?? this.id,
@@ -26,6 +41,11 @@ class ApiProfile {
       apiKey: apiKey ?? this.apiKey,
       baseUrl: baseUrl ?? this.baseUrl,
       chatBaseUrl: chatBaseUrl ?? this.chatBaseUrl,
+      defaultModel: defaultModel ?? this.defaultModel,
+      defaultSize: defaultSize ?? this.defaultSize,
+      defaultCount: defaultCount ?? this.defaultCount,
+      defaultChatModel: defaultChatModel ?? this.defaultChatModel,
+      defaultTemperature: defaultTemperature ?? this.defaultTemperature,
     );
   }
 
@@ -36,6 +56,11 @@ class ApiProfile {
       'apiKey': apiKey,
       'baseUrl': baseUrl,
       if (chatBaseUrl != null) 'chatBaseUrl': chatBaseUrl,
+      'defaultModel': defaultModel,
+      'defaultSize': defaultSize,
+      'defaultCount': defaultCount,
+      'defaultChatModel': defaultChatModel,
+      'defaultTemperature': defaultTemperature,
     };
   }
 
@@ -46,6 +71,11 @@ class ApiProfile {
       apiKey: json['apiKey'] as String? ?? '',
       baseUrl: json['baseUrl'] as String? ?? '',
       chatBaseUrl: json['chatBaseUrl'] as String?,
+      defaultModel: json['defaultModel'] as String? ?? 'gpt-image-2',
+      defaultSize: json['defaultSize'] as String? ?? '1024x1024',
+      defaultCount: (json['defaultCount'] as int?) ?? 1,
+      defaultChatModel: json['defaultChatModel'] as String? ?? 'gpt-4o',
+      defaultTemperature: (json['defaultTemperature'] as num?)?.toDouble() ?? 0.7,
     );
   }
 
@@ -165,11 +195,16 @@ class ApiConfig {
   static const String sharedActiveProfileIdKey = 'activeProfileId';
 
   static ApiProfile defaultProfile() {
-    return ApiProfile(
+    return const ApiProfile(
       id: 'default',
       name: '默认配置',
       apiKey: '',
-      baseUrl: defaultBaseUrl,
+      baseUrl: 'https://jeniya.cn',
+      defaultModel: 'gpt-image-2',
+      defaultSize: '1024x1024',
+      defaultCount: 1,
+      defaultChatModel: 'gpt-4o',
+      defaultTemperature: 0.7,
     );
   }
 

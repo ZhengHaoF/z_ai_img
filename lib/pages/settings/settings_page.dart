@@ -170,6 +170,141 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
 
                       const SizedBox(height: 16),
 
+                      const Text(
+                        '默认生图参数',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // 默认模型
+                      DropdownButtonFormField<String>(
+                        value: profile.defaultModel,
+                        decoration: const InputDecoration(labelText: '默认模型'),
+                        items: ApiConfig.generateModels.map((model) {
+                          return DropdownMenuItem(value: model, child: Text(model));
+                        }).toList(),
+                        onChanged: (value) {
+                          if (value != null) {
+                            final updated = profile.copyWith(defaultModel: value);
+                            notifier.updateProfile(updated);
+                          }
+                        },
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      // 默认尺寸
+                      DropdownButtonFormField<String>(
+                        value: profile.defaultSize,
+                        decoration: const InputDecoration(labelText: '默认尺寸'),
+                        items: ApiConfig.imageSizes.map((size) {
+                          return DropdownMenuItem(value: size, child: Text(size));
+                        }).toList(),
+                        onChanged: (value) {
+                          if (value != null) {
+                            final updated = profile.copyWith(defaultSize: value);
+                            notifier.updateProfile(updated);
+                          }
+                        },
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      // 默认数量
+                      Row(
+                        children: [
+                          const Expanded(
+                            child: Text('默认生成数量'),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.remove),
+                            onPressed: profile.defaultCount <= ApiConfig.minGenerateCount
+                                ? null
+                                : () {
+                                    final updated = profile.copyWith(defaultCount: profile.defaultCount - 1);
+                                    notifier.updateProfile(updated);
+                                  },
+                          ),
+                          Text(
+                            '${profile.defaultCount}',
+                            style: const TextStyle(fontSize: 16),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.add),
+                            onPressed: profile.defaultCount >= ApiConfig.maxGenerateCount
+                                ? null
+                                : () {
+                                    final updated = profile.copyWith(defaultCount: profile.defaultCount + 1);
+                                    notifier.updateProfile(updated);
+                                  },
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      const Text(
+                        '默认对话参数',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // 默认对话模型
+                      DropdownButtonFormField<String>(
+                        value: profile.defaultChatModel,
+                        decoration: const InputDecoration(labelText: '默认对话模型'),
+                        items: ApiConfig.chatModels.map((model) {
+                          return DropdownMenuItem(value: model, child: Text(model));
+                        }).toList(),
+                        onChanged: (value) {
+                          if (value != null) {
+                            final updated = profile.copyWith(defaultChatModel: value);
+                            notifier.updateProfile(updated);
+                          }
+                        },
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      // 默认温度
+                      Row(
+                        children: [
+                          const Expanded(
+                            child: Text('默认温度'),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.remove),
+                            onPressed: profile.defaultTemperature <= 0
+                                ? null
+                                : () {
+                                    final updated = profile.copyWith(defaultTemperature: (profile.defaultTemperature - 0.1).clamp(0.0, 2.0));
+                                    notifier.updateProfile(updated);
+                                  },
+                          ),
+                          Text(
+                            profile.defaultTemperature.toStringAsFixed(1),
+                            style: const TextStyle(fontSize: 16),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.add),
+                            onPressed: profile.defaultTemperature >= 2
+                                ? null
+                                : () {
+                                    final updated = profile.copyWith(defaultTemperature: (profile.defaultTemperature + 0.1).clamp(0.0, 2.0));
+                                    notifier.updateProfile(updated);
+                                  },
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 16),
+
                       Row(
                         children: [
                           Expanded(
@@ -190,81 +325,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                         ],
                       ),
                     ],
-                  ],
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 16),
-
-            // 默认参数
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      '默认参数',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-
-                    // 默认模型
-                    DropdownButtonFormField<String>(
-                      value: settings.defaultModel,
-                      decoration: const InputDecoration(labelText: '默认模型'),
-                      items: ApiConfig.generateModels.map((model) {
-                        return DropdownMenuItem(value: model, child: Text(model));
-                      }).toList(),
-                      onChanged: (value) {
-                        if (value != null) notifier.setDefaultModel(value);
-                      },
-                    ),
-
-                    const SizedBox(height: 16),
-
-                    // 默认尺寸
-                    DropdownButtonFormField<String>(
-                      value: settings.defaultSize,
-                      decoration: const InputDecoration(labelText: '默认尺寸'),
-                      items: ApiConfig.imageSizes.map((size) {
-                        return DropdownMenuItem(value: size, child: Text(size));
-                      }).toList(),
-                      onChanged: (value) {
-                        if (value != null) notifier.setDefaultSize(value);
-                      },
-                    ),
-
-                    const SizedBox(height: 16),
-
-                    // 默认数量
-                    Row(
-                      children: [
-                        const Expanded(
-                          child: Text('默认生成数量'),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.remove),
-                          onPressed: settings.defaultCount <= ApiConfig.minGenerateCount
-                              ? null
-                              : () => notifier.setDefaultCount(settings.defaultCount - 1),
-                        ),
-                        Text(
-                          '${settings.defaultCount}',
-                          style: const TextStyle(fontSize: 16),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.add),
-                          onPressed: settings.defaultCount >= ApiConfig.maxGenerateCount
-                              ? null
-                              : () => notifier.setDefaultCount(settings.defaultCount + 1),
-                        ),
-                      ],
-                    ),
                   ],
                 ),
               ),

@@ -72,11 +72,14 @@ class ChatHistoryStorage {
 
 class ChatNotifier extends StateNotifier<ChatState> {
   final ChatService _chatService;
+  final dynamic _ref;
   CancelToken? _cancelToken;
   String? _loadingMessageId;
   Timer? _saveTimer;
 
-  ChatNotifier(this._chatService) : super(const ChatState()) {
+  ChatNotifier(this._chatService, [dynamic ref])
+      : _ref = ref ?? ProviderContainer(),
+        super(const ChatState()) {
     _loadHistory();
   }
 
@@ -102,6 +105,11 @@ class ChatNotifier extends StateNotifier<ChatState> {
 
   Future<void> sendMessage(String content) async {
     if (content.trim().isEmpty) return;
+
+    final settings = _ref.read(settingsProvider);
+    final profile = settings.activeProfile() ?? ApiConfig.defaultProfile();
+    final model = profile.defaultChatModel;
+    final temperature = profile.defaultTemperature;
 
     final userMessage = ChatMessage(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
@@ -133,9 +141,9 @@ class ChatNotifier extends StateNotifier<ChatState> {
       _cancelToken = CancelToken();
 
       final response = await _chatService.sendMessage(
-        model: ApiConfig.defaultChatModel,
+        model: model,
         messages: messagesForApi,
-        temperature: ApiConfig.defaultTemperature,
+        temperature: temperature,
         cancelToken: _cancelToken,
       );
 
@@ -212,5 +220,5 @@ class ChatNotifier extends StateNotifier<ChatState> {
 
 final chatProvider = StateNotifierProvider<ChatNotifier, ChatState>((ref) {
   final chatService = ref.watch(chatServiceProvider);
-  return ChatNotifier(chatService);
+  return ChatNotifier(chatService, ref);
 });
