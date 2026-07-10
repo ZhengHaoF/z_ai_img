@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -8,7 +7,6 @@ import '../../models/image_result.dart';
 import '../../providers/edit_provider.dart';
 import '../../providers/settings_provider.dart';
 import '../../utils/foreground_service.dart';
-import '../../utils/image_utils.dart';
 import '../../widgets/common/confirm_dialog.dart';
 import '../../widgets/common/empty_state.dart';
 import '../../widgets/common/error_banner.dart';
@@ -66,11 +64,14 @@ class _EditPageState extends ConsumerState<EditPage>
               label: '重试',
               onPressed: () {
                 final prompt = _promptController.text.trim();
-                if (prompt.isNotEmpty) {
+                final editState = ref.read(editProvider);
+                if (prompt.isNotEmpty && editState.selectedImages.isNotEmpty) {
                   _cancelToken = CancelToken();
                   ref.read(editProvider.notifier).editImage(
                     prompt: prompt,
-                    imagePaths: const [],
+                    imagePaths: editState.selectedImagePaths,
+                    images: editState.selectedImages,
+                    maskImage: editState.maskImage,
                     cancelToken: _cancelToken,
                   );
                 }
@@ -115,6 +116,10 @@ class _EditPageState extends ConsumerState<EditPage>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    _buildSourceImageSection(state, notifier),
+                    const SizedBox(height: 16),
+                    _buildMaskImageSection(state, notifier),
+                    const SizedBox(height: 16),
                     _buildPromptInput(state, notifier),
                     const SizedBox(height: 16),
                     _buildBasicParams(state, notifier, profile),
@@ -130,6 +135,178 @@ class _EditPageState extends ConsumerState<EditPage>
                 ),
               ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSourceImageSection(EditState state, EditNotifier notifier) {
+    final images = state.selectedImages;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              '源图片',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '选择一张或多张图片进行编辑',
+              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+            ),
+            const SizedBox(height: 12),
+            if (images.isEmpty)
+              Row(
+                children: [
+                  ElevatedButton.icon(
+                    onPressed: state.isLoading ? null : () => notifier.pickSourceImages(),
+                    icon: const Icon(Icons.photo_library_outlined, size: 18),
+                    label: const Text('添加图片'),
+                  ),
+                  const SizedBox(width: 12),
+                  OutlinedButton.icon(
+                    onPressed: null,
+                    icon: const Icon(Icons.clear, size: 18),
+                    label: const Text('清空'),
+                  ),
+                ],
+              )
+            else ...[
+              // 图片预览
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (int i = 0; i < images.length; i++)
+                    Stack(
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: Image.memory(
+                            images[i],
+                            width: 80,
+                            height: 80,
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                        Positioned(
+                          top: -4,
+                          right: -4,
+                          child: IconButton(
+                            iconSize: 18,
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+                            icon: Container(
+                              decoration: BoxDecoration(
+                                color: Colors.black54,
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(Icons.close, color: Colors.white, size: 12),
+                            ),
+                            onPressed: state.isLoading
+                                ? null
+                                : () {
+                                    final updated = List<Uint8List>.from(images)..removeAt(i);
+                                    final updatedPaths = List<String>.from(state.selectedImagePaths);
+                                    if (updatedPaths.length > i) updatedPaths.removeAt(i);
+                                    notifier.stateUpdated(updated, updatedPaths);
+                                  },
+                          ),
+                        ),
+                      ],
+                    ),
+                  // 添加更多按钮
+                  if (!state.isLoading)
+                    GestureDetector(
+                      onTap: () => notifier.pickSourceImages(),
+                      child: Container(
+                        width: 80,
+                        height: 80,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.grey[300]!, style: BorderStyle.solid, width: 1.5),
+                          color: Colors.grey[50],
+                        ),
+                        child: Icon(Icons.add, size: 28, color: Colors.grey[400]),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  ElevatedButton.icon(
+                    onPressed: state.isLoading ? null : () => notifier.pickSourceImages(),
+                    icon: const Icon(Icons.add_photo_alternate_outlined, size: 18),
+                    label: const Text('添加图片'),
+                  ),
+                  const SizedBox(width: 12),
+                  OutlinedButton.icon(
+                    onPressed: state.isLoading ? null : () => notifier.clearSourceImages(),
+                    icon: const Icon(Icons.clear, size: 18),
+                    label: const Text('清空'),
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMaskImageSection(EditState state, EditNotifier notifier) {
+    final maskImage = state.maskImage;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              '遮罩图片（可选）',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '指定编辑区域，仅对第一张图生效',
+              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+            ),
+            const SizedBox(height: 12),
+            if (maskImage == null)
+              OutlinedButton.icon(
+                onPressed: state.isLoading || state.selectedImages.isEmpty
+                    ? null
+                    : () => notifier.pickMaskImage(),
+                icon: const Icon(Icons.layers_outlined, size: 18),
+                label: const Text('选择遮罩'),
+              )
+            else
+              Row(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.memory(
+                      maskImage,
+                      width: 60,
+                      height: 60,
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  OutlinedButton.icon(
+                    onPressed: state.isLoading
+                        ? null
+                        : () => notifier.clearMaskImage(),
+                    icon: const Icon(Icons.remove_circle_outline, size: 18),
+                    label: const Text('移除遮罩'),
+                  ),
+                ],
+              ),
           ],
         ),
       ),
@@ -311,7 +488,9 @@ class _EditPageState extends ConsumerState<EditPage>
                         _cancelToken = CancelToken();
                         notifier.editImage(
                           prompt: prompt,
-                          imagePaths: const [],
+                          imagePaths: state.selectedImagePaths,
+                          images: state.selectedImages,
+                          maskImage: state.maskImage,
                           cancelToken: _cancelToken,
                         );
                       }
