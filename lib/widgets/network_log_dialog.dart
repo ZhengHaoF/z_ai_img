@@ -183,18 +183,6 @@ class _LogTileState extends State<_LogTile> {
     }
   }
 
-  String _truncateData(dynamic data) {
-    try {
-      final str = data.toString();
-      if (str.length > 50) {
-        return '${str.substring(0, 50)}...';
-      }
-      return str;
-    } catch (e) {
-      return '[数据]';
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final log = widget.log;

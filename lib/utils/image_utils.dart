@@ -3,7 +3,8 @@ import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 
-import 'image_utils_nonweb.dart' if (dart.library.html) 'image_utils_web.dart';
+// 项目已明确不支持 Web 端（放弃 Web 平台），仅保留非 Web 实现的图片工具。
+import 'image_utils_nonweb.dart';
 
 class ImageUtils {
   static final ImagePicker _imagePicker = ImagePicker();

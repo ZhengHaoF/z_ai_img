@@ -117,7 +117,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
       content: content,
     );
 
-    final loadingId = DateTime.now().millisecondsSinceEpoch.toString() + '_loading';
+    final loadingId = '${DateTime.now().millisecondsSinceEpoch}_loading';
     final loadingMessage = ChatMessage(
       id: loadingId,
       role: ChatRole.assistant,

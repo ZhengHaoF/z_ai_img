@@ -15,5 +15,8 @@ class ApiClient extends BaseHttpClient {
     if (baseUrl != null) {
       updateBaseUrl(baseUrl);
     }
+    if (apiKey != null) {
+      updateAuthToken(apiKey);
+    }
   }
 }

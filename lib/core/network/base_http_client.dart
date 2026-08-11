@@ -29,7 +29,7 @@ class BaseHttpClient {
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
-          if (defaultHeaders != null) ...defaultHeaders,
+          ...?defaultHeaders,
         },
       ),
     );
@@ -65,8 +65,8 @@ class BaseHttpClient {
                 timestamp: DateTime.now(),
                 method: options.method,
                 url: options.uri.toString(),
-                headers: Map<String, dynamic>.from(options.headers),
-                data: options.data,
+                headers: sanitizeHeaders(options.headers),
+                data: truncateLogData(options.data),
               ),
             );
           }
@@ -85,7 +85,8 @@ class BaseHttpClient {
                 method: response.requestOptions.method,
                 url: response.requestOptions.uri.toString(),
                 statusCode: response.statusCode,
-                data: response.data,
+                headers: sanitizeHeaders(response.requestOptions.headers),
+                data: truncateLogData(response.data),
                 duration: duration,
               ),
             );
@@ -105,6 +106,7 @@ class BaseHttpClient {
                 method: error.requestOptions.method,
                 url: error.requestOptions.uri.toString(),
                 statusCode: error.response?.statusCode,
+                headers: sanitizeHeaders(error.requestOptions.headers),
                 errorMessage: error.message,
                 duration: duration,
               ),
@@ -197,8 +199,21 @@ class BaseHttpClient {
     _dio.options.baseUrl = baseUrl;
   }
 
+  void updateAuthToken(String token) {
+    if (token.isNotEmpty) {
+      _dio.options.headers['Authorization'] = 'Bearer $token';
+    } else {
+      _dio.options.headers.remove('Authorization');
+    }
+  }
+
   void updateHeaders(Map<String, String> headers) {
     _dio.options.headers.addAll(headers);
+  }
+
+  void dispose() {
+    _dio.close(force: true);
+    _downloadDio.close(force: true);
   }
 
   AppException _handleError(DioException error) {

@@ -9,7 +9,6 @@ import '../core/platform/foreground_service_impl.dart';
 import '../core/platform/system_tray_interface.dart';
 import '../core/platform/system_tray_impl.dart';
 import '../core/platform/platform_capabilities.dart';
-import '../utils/foreground_service.dart';
 import '../app.dart';
 
 class AppBootstrap {
@@ -25,9 +24,9 @@ class AppBootstrap {
       final prefs = await SharedPreferences.getInstance();
 
       try {
-        final notificationService = ForegroundServiceImpl();
-        if (notificationService.isSupported) {
-          await ForegroundService.requestPermission();
+        const IForegroundService foregroundService = ForegroundServiceImpl();
+        if (foregroundService.isSupported) {
+          await foregroundService.requestPermission();
         }
       } catch (e) {
         debugPrint('⚠️ 初始化通知服务失败: $e');
@@ -58,7 +57,7 @@ class AppBootstrap {
 
     if (PlatformCapabilities.isDesktop) {
       if (showTrayIcon) {
-        final trayService = SystemTrayServiceImpl();
+        final ISystemTrayService trayService = SystemTrayServiceImpl();
         if (trayService.isSupported) {
           await trayService.initialize(
             onOpenWindow: () {

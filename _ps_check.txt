@@ -1,0 +1,3 @@
+COUNT=0
+--- lockfile handle test ---
+LOCKFILE_OPENABLE_READ=YES

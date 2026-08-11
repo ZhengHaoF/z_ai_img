@@ -1,16 +1,19 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../config/api_config.dart';
 import '../../models/image_result.dart';
 import '../../providers/generate_provider.dart';
 import '../../providers/settings_provider.dart';
+import '../../utils/background_error.dart';
 import '../../utils/foreground_service.dart';
 import '../../widgets/common/confirm_dialog.dart';
-import '../../widgets/common/empty_state.dart';
-import '../../widgets/common/error_banner.dart';
-import '../../widgets/common/result_grid.dart';
+import '../../widgets/common/feedback.dart';
+import '../../widgets/params/model_selector.dart';
+import '../../widgets/params/prompt_field.dart';
+import '../../widgets/params/result_section.dart';
+import '../../widgets/params/size_count_selector.dart';
+import '../../widgets/params/submit_button.dart';
 import '../preview/image_preview_page.dart';
 
 class GeneratePage extends ConsumerStatefulWidget {
@@ -56,7 +59,7 @@ class _GeneratePageState extends ConsumerState<GeneratePage>
       }
     } else if (state == AppLifecycleState.resumed) {
       final error = genState.error;
-      if (error != null && _isBackgroundInterruptedError(error)) {
+      if (error != null && isBackgroundInterruptedError(error)) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: const Text('⚠️ 由于切后台，生成任务可能已中断。是否重新尝试？'),
@@ -67,9 +70,9 @@ class _GeneratePageState extends ConsumerState<GeneratePage>
                 if (prompt.isNotEmpty) {
                   _cancelToken = CancelToken();
                   ref.read(generateProvider.notifier).generateImage(
-                    prompt: prompt,
-                    cancelToken: _cancelToken,
-                  );
+                        prompt: prompt,
+                        cancelToken: _cancelToken,
+                      );
                 }
               },
             ),
@@ -79,15 +82,6 @@ class _GeneratePageState extends ConsumerState<GeneratePage>
         );
       }
     }
-  }
-
-  bool _isBackgroundInterruptedError(String error) {
-    final normalized = error.toLowerCase();
-    return normalized.contains('connection') ||
-        normalized.contains('timeout') ||
-        normalized.contains('socket') ||
-        normalized.contains('网络') ||
-        normalized.contains('连接');
   }
 
   @override
@@ -102,207 +96,50 @@ class _GeneratePageState extends ConsumerState<GeneratePage>
         child: Column(
           children: [
             if (state.isLoading)
-              const LinearProgressIndicator(
-                backgroundColor: Colors.transparent,
-              ),
-
+              const LinearProgressIndicator(backgroundColor: Colors.transparent),
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.all(16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    _buildPromptInput(state, notifier),
+                    PromptField(
+                      controller: _promptController,
+                      focusNode: _promptFocusNode,
+                      enabled: !state.isLoading,
+                      title: '提示词',
+                      hintText: '输入描述，开始生成你的 AI 图片',
+                      maxLength: ApiConfig.maxPromptLength,
+                    ),
                     const SizedBox(height: 16),
-                    _buildBasicParams(state, notifier, profile),
+                    SizeAndCountSelector(
+                      profile: profile,
+                      isLoading: state.isLoading,
+                      showAdvanced: _showAdvanced,
+                      onToggleAdvanced: () =>
+                          setState(() => _showAdvanced = !_showAdvanced),
+                    ),
                     if (_showAdvanced) ...[
                       const SizedBox(height: 16),
-                      _buildAdvancedParams(state, notifier, profile),
-                    ],
-                    const SizedBox(height: 16),
-                    _buildGenerateButton(state, notifier, settings),
-                    const SizedBox(height: 16),
-                    _buildResults(state, notifier),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPromptInput(GenerateState state, GenerateNotifier notifier) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          '提示词',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 8),
-        TextField(
-          controller: _promptController,
-          focusNode: _promptFocusNode,
-          maxLines: 5,
-          maxLength: ApiConfig.maxPromptLength,
-          decoration: InputDecoration(
-            hintText: '输入描述，开始生成你的 AI 图片',
-            suffixIcon: state.prompt?.isNotEmpty ?? false
-                ? IconButton(
-                    icon: const Icon(Icons.clear),
-                    onPressed: () {
-                      _promptController.clear();
-                    },
-                  )
-                : null,
-          ),
-          enabled: !state.isLoading,
-        ),
-      ],
-    );
-  }
-
-  Widget _buildBasicParams(GenerateState state, GenerateNotifier notifier, ApiProfile profile) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            TextButton.icon(
-              onPressed: () => setState(() => _showAdvanced = !_showAdvanced),
-              icon: Icon(_showAdvanced ? Icons.expand_less : Icons.expand_more),
-              label: Text(_showAdvanced ? '收起设置' : '更多设置'),
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('画布尺寸'),
-                      const SizedBox(height: 4),
-                      DropdownButton<String>(
-                        value: profile.defaultSize,
-                        isExpanded: true,
-                        items: ApiConfig.imageSizes.map((size) {
-                          return DropdownMenuItem(value: size, child: Text(size));
-                        }).toList(),
-                        onChanged: state.isLoading
-                            ? null
-                            : (value) {
-                                if (value != null) {
-                                  final updated = profile.copyWith(defaultSize: value);
-                                  ref.read(settingsProvider.notifier).updateProfile(updated);
-                                }
-                              },
+                      ModelSelector(
+                        profile: profile,
+                        isLoading: state.isLoading,
+                        models: ApiConfig.generateModels,
+                        label: '模型',
                       ),
                     ],
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('生成数量'),
-                      const SizedBox(height: 4),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          InkWell(
-                            onTap: state.isLoading || profile.defaultCount <= ApiConfig.minGenerateCount
-                                ? null
-                                : () {
-                                    final updated = profile.copyWith(defaultCount: profile.defaultCount - 1);
-                                    ref.read(settingsProvider.notifier).updateProfile(updated);
-                                  },
-                            child: const Icon(Icons.remove, size: 20),
-                          ),
-                          Text(
-                            '${profile.defaultCount}',
-                            style: const TextStyle(fontSize: 16),
-                          ),
-                          InkWell(
-                            onTap: state.isLoading || profile.defaultCount >= ApiConfig.maxGenerateCount
-                                ? null
-                                : () {
-                                    final updated = profile.copyWith(defaultCount: profile.defaultCount + 1);
-                                    ref.read(settingsProvider.notifier).updateProfile(updated);
-                                  },
-                            child: const Icon(Icons.add, size: 20),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildAdvancedParams(GenerateState state, GenerateNotifier notifier, ApiProfile profile) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              '高级设置',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 12),
-            DropdownButtonFormField<String>(
-              value: profile.defaultModel,
-              decoration: const InputDecoration(labelText: '模型'),
-              items: ApiConfig.generateModels.map((model) {
-                return DropdownMenuItem(value: model, child: Text(model));
-              }).toList(),
-              onChanged: state.isLoading
-                  ? null
-                  : (value) {
-                      if (value != null) {
-                        final updated = profile.copyWith(defaultModel: value);
-                        ref.read(settingsProvider.notifier).updateProfile(updated);
-                      }
-                    },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildGenerateButton(
-    GenerateState state,
-    GenerateNotifier notifier,
-    SettingsState settings,
-  ) {
-    return Column(
-      children: [
-        SizedBox(
-          width: double.infinity,
-          child: ElevatedButton.icon(
-            onPressed: state.isLoading
-                ? null
-                : (settings.hasApiKey
-                    ? () {
+                    const SizedBox(height: 16),
+                    SubmitButton(
+                      isLoading: state.isLoading,
+                      hasApiKey: settings.hasApiKey,
+                      idleLabel: '生成图片',
+                      loadingLabel: 'AI 正在生成中，请稍候...',
+                      noApiKeyLabel: '请先配置 API Key',
+                      icon: Icons.auto_awesome,
+                      onPressed: () {
                         final prompt = _promptController.text.trim();
                         if (prompt.isEmpty) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('请输入提示词'),
-                              behavior: SnackBarBehavior.floating,
-                            ),
-                          );
+                          showAppSnackBar(context, '请输入提示词');
                           return;
                         }
                         _cancelToken = CancelToken();
@@ -310,102 +147,31 @@ class _GeneratePageState extends ConsumerState<GeneratePage>
                           prompt: prompt,
                           cancelToken: _cancelToken,
                         );
-                      }
-                    : null),
-            icon: state.isLoading
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.auto_awesome),
-            label: Text(
-              state.isLoading
-                  ? 'AI 正在生成中，请稍候...'
-                  : (settings.hasApiKey ? '生成图片' : '请先配置 API Key'),
+                      },
+                      onCancel: () => _cancelToken?.cancel('用户取消'),
+                    ),
+                    const SizedBox(height: 16),
+                    ResultSection(
+                      images: state.images,
+                      title: '生成结果',
+                      error: state.error,
+                      isLoading: state.isLoading,
+                      emptyIcon: Icons.image_outlined,
+                      emptyTitle: '输入描述，开始生成你的 AI 图片',
+                      onItemTap: (index) => _openPreview(index, state.images),
+                      onItemSave: (index) => saveImageWithFeedback(
+                        context,
+                        state.images[index].imageData,
+                      ),
+                      onClear: _onClearPressed,
+                    ),
+                  ],
+                ),
+              ),
             ),
-          ),
+          ],
         ),
-        if (state.isLoading) ...[
-          const SizedBox(height: 8),
-          TextButton(
-            onPressed: () {
-              _cancelToken?.cancel('用户取消');
-            },
-            child: const Text('取消'),
-          ),
-        ],
-      ],
-    );
-  }
-
-  Widget _buildResults(GenerateState state, GenerateNotifier notifier) {
-    final images = state.images;
-
-    if (images.isEmpty) {
-      if (state.isLoading) {
-        return const SizedBox.shrink();
-      }
-
-      if (state.error != null) {
-        return _buildErrorState(state.error);
-      }
-
-      return const EmptyState(
-        icon: Icons.image_outlined,
-        title: '输入描述，开始生成你的 AI 图片',
-      );
-    }
-
-    final children = <Widget>[];
-
-    if (state.error != null) {
-      children.add(_buildErrorState(state.error));
-      children.add(const SizedBox(height: 12));
-    }
-
-    children.addAll([
-      Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          const Text(
-            '生成结果',
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-          ),
-          TextButton.icon(
-            onPressed: _onClearPressed,
-            icon: const Icon(Icons.clear_all, size: 18),
-            label: const Text('清除'),
-          ),
-        ],
       ),
-      const SizedBox(height: 8),
-      ResultGrid(
-        images: images,
-        onItemTap: (index) => _openPreview(index, images),
-      ),
-    ]);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: children,
-    );
-  }
-
-  Widget _buildErrorState(String? message) {
-    final errorText = message ?? '发生错误';
-    return ErrorBanner(
-      message: errorText,
-      onCopy: () {
-        Clipboard.setData(ClipboardData(text: errorText));
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('已复制到剪贴板'),
-            behavior: SnackBarBehavior.floating,
-            duration: Duration(seconds: 1),
-          ),
-        );
-      },
     );
   }
 
@@ -427,9 +193,8 @@ class _GeneratePageState extends ConsumerState<GeneratePage>
       title: '确认清除',
       content: '确定要清空所有已生成的图片吗？',
     );
-
     if (confirmed == true && mounted) {
-      ref.read(generateProvider.notifier).clearError();
+      ref.read(generateProvider.notifier).clearResults();
     }
   }
 }

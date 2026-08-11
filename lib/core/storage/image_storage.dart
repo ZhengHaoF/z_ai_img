@@ -1,21 +1,11 @@
 import 'dart:io';
 import 'dart:typed_data';
-import 'package:path_provider/path_provider.dart';
 
 class ImageStorage {
   final Directory directory;
   final int maxCacheSizeMB;
 
   ImageStorage(this.directory, {this.maxCacheSizeMB = 500});
-
-  static Future<ImageStorage> create({int maxCacheSizeMB = 500}) async {
-    final appDir = await getApplicationSupportDirectory();
-    final imageDir = Directory('${appDir.path}/images');
-    if (!await imageDir.exists()) {
-      await imageDir.create(recursive: true);
-    }
-    return ImageStorage(imageDir, maxCacheSizeMB: maxCacheSizeMB);
-  }
 
   Future<String> save(String id, Uint8List data) async {
     final file = File('${directory.path}/$id.png');

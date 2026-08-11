@@ -118,23 +118,6 @@ class ImageRepository {
     _imageStorage.save(result.id, result.imageData);
   }
 
-  Future<ImageResult?> getFromCache(String id) async {
-    if (_cache.containsKey(id)) {
-      _cacheOrder.remove(id);
-      _cacheOrder.add(id);
-      return _cache[id];
-    }
-
-    final bytes = await _imageStorage.load(id);
-    if (bytes != null) {
-      final result = ImageResult(id: id, imageData: bytes, prompt: '');
-      _cache[id] = result;
-      _cacheOrder.add(id);
-      return result;
-    }
-    return null;
-  }
-
   void clearCache() {
     _cache.clear();
     _cacheOrder.clear();

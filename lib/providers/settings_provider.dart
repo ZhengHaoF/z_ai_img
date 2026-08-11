@@ -245,24 +245,37 @@ final settingsProvider = StateNotifierProvider<SettingsNotifier, SettingsState>(
 });
 
 // API Client provider
+// 只依赖 activeProfile 的 (baseUrl, apiKey) 组合键。修改画布尺寸 / 生成数量 / 深色模式
+// 等与鉴权无关的开关时，组合键不变，Provider 不会重建，从而避免级联重建整棵业务树、
+// 清空已生成的图片与聊天记录（原代码 watch 整个 SettingsState 导致每次改动都重建）。
 final apiClientProvider = Provider<ApiClient>((ref) {
-  final settings = ref.watch(settingsProvider);
-  final profile = settings.activeProfile() ?? ApiConfig.defaultProfile();
+  final key = ref.watch(
+    settingsProvider.select((s) {
+      final p = s.activeProfile();
+      return p == null ? null : (baseUrl: p.baseUrl, apiKey: p.apiKey);
+    }),
+  );
+  final baseUrl = key?.baseUrl ?? ApiConfig.defaultBaseUrl;
+  final apiKey = key?.apiKey ?? '';
+
   final client = ApiClient(
-    baseUrl: profile.baseUrl,
-    apiKey: profile.apiKey,
+    baseUrl: baseUrl,
+    apiKey: apiKey,
     onLog: (log) {
       ref.read(networkLogProvider.notifier).addLog(log);
     },
   );
-  ref.listen<SettingsState>(settingsProvider, (prev, next) {
-    final nextProfile = next.activeProfile();
-    if (nextProfile == null) return;
-    client.updateConfig(
-      baseUrl: nextProfile.baseUrl,
-      apiKey: nextProfile.apiKey,
-    );
-  });
+  ref.onDispose(client.dispose);
+  ref.listen<({String baseUrl, String apiKey})?>(
+    settingsProvider.select((s) {
+      final p = s.activeProfile();
+      return p == null ? null : (baseUrl: p.baseUrl, apiKey: p.apiKey);
+    }),
+    (prev, next) {
+      if (next == null) return;
+      client.updateConfig(baseUrl: next.baseUrl, apiKey: next.apiKey);
+    },
+  );
   return client;
 });
 
@@ -281,10 +294,19 @@ final imageRepositoryProvider = Provider<ImageRepository>((ref) {
 });
 
 // Chat Service provider
+// 同样只依赖 activeProfile 的 (chatBaseUrl, apiKey) 组合键，避免无关设置改动触发重建。
 final chatServiceProvider = Provider<ChatService>((ref) {
-  final settings = ref.watch(settingsProvider);
-  final profile = settings.activeProfile() ?? ApiConfig.defaultProfile();
-  final baseUrl = profile.resolveChatBaseUrl();
+  final key = ref.watch(
+    settingsProvider.select((s) {
+      final p = s.activeProfile();
+      return p == null
+          ? null
+          : (baseUrl: p.resolveChatBaseUrl(), apiKey: p.apiKey);
+    }),
+  );
+  final baseUrl = key?.baseUrl ?? ApiConfig.defaultBaseUrl;
+  final apiKey = key?.apiKey ?? '';
+
   final dio = Dio(
     BaseOptions(
       baseUrl: baseUrl,
@@ -295,16 +317,24 @@ final chatServiceProvider = Provider<ChatService>((ref) {
   final service = ChatService(
     dio: dio,
     baseUrl: baseUrl,
-    apiKey: profile.apiKey,
+    apiKey: apiKey,
     onLog: (log) {
       ref.read(networkLogProvider.notifier).addLog(log);
     },
   );
-  ref.listen<SettingsState>(settingsProvider, (prev, next) {
-    final nextProfile = next.activeProfile();
-    if (nextProfile == null) return;
-    service.updateApiKey(nextProfile.apiKey);
-    service.updateBaseUrl(nextProfile.resolveChatBaseUrl());
-  });
+  ref.onDispose(service.dispose);
+  ref.listen<({String baseUrl, String apiKey})?>(
+    settingsProvider.select((s) {
+      final p = s.activeProfile();
+      return p == null
+          ? null
+          : (baseUrl: p.resolveChatBaseUrl(), apiKey: p.apiKey);
+    }),
+    (prev, next) {
+      if (next == null) return;
+      service.updateApiKey(next.apiKey);
+      service.updateBaseUrl(next.baseUrl);
+    },
+  );
   return service;
 });

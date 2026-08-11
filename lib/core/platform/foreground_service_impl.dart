@@ -1,10 +1,16 @@
 import 'package:flutter/foundation.dart';
-import './foreground_service_interface.dart';
+
 import '../../utils/foreground_service.dart';
+import './foreground_service_interface.dart';
 
 class ForegroundServiceImpl implements IForegroundService {
+  const ForegroundServiceImpl();
+
   @override
-  bool get isSupported => !kIsWeb && (defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS);
+  bool get isSupported =>
+      !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.android ||
+          defaultTargetPlatform == TargetPlatform.iOS);
 
   @override
   Future<bool> requestPermission() async {
@@ -15,7 +21,10 @@ class ForegroundServiceImpl implements IForegroundService {
   @override
   Future<void> start({required String title, String? body}) async {
     if (!isSupported) return;
-    await ForegroundService.showGeneratingNotification(title: title, body: body);
+    await ForegroundService.showGeneratingNotification(
+      title: title,
+      body: body,
+    );
   }
 
   @override
@@ -27,6 +36,21 @@ class ForegroundServiceImpl implements IForegroundService {
   @override
   Future<void> update({String? title, String? body}) async {
     if (!isSupported) return;
-    await ForegroundService.updateGeneratingNotification(title: title ?? '', body: body ?? '');
+    await ForegroundService.updateGeneratingNotification(
+      title: title ?? '',
+      body: body ?? '',
+    );
+  }
+
+  @override
+  Future<void> showCompleted({
+    required String title,
+    required String body,
+  }) async {
+    if (!isSupported) return;
+    await ForegroundService.showCompletedNotification(
+      title: title,
+      body: body,
+    );
   }
 }

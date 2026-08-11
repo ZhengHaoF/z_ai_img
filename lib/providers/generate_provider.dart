@@ -6,6 +6,7 @@ import '../models/generate/generate_request.dart';
 import '../models/image_result.dart';
 import '../providers/settings_provider.dart';
 import '../repositories/image_repository.dart';
+import '../utils/native_foreground_service.dart';
 
 class GenerateState {
   final List<ImageResult> images;
@@ -68,10 +69,15 @@ class GenerateNotifier extends StateNotifier<GenerateState> {
     final count = n ?? profile.defaultCount;
 
     state = state.copyWith(
-      images: const [],
       isLoading: true,
       error: null,
       prompt: prompt,
+    );
+
+    // 启动 Android 原生前台服务保活，防止切后台被系统杀死
+    await NativeForegroundService.start(
+      title: '🎨 正在生成图片',
+      body: 'AI 正在处理，请稍候...',
     );
 
     try {
@@ -90,24 +96,33 @@ class GenerateNotifier extends StateNotifier<GenerateState> {
       );
 
       state = state.copyWith(
-        images: images,
+        images: state.images + images,
         isLoading: false,
       );
     } on AppException catch (e) {
-      state = state.copyWith(
-        isLoading: false,
-        error: e.message,
-      );
+      // 取消（CancelException）不算错误，不弹错误横幅，仅结束 loading。
+      if (e is CancelException) {
+        state = state.copyWith(isLoading: false);
+      } else {
+        state = state.copyWith(isLoading: false, error: e.message);
+      }
     } catch (e) {
       state = state.copyWith(
         isLoading: false,
         error: e.toString(),
       );
+    } finally {
+      // 无论成功/失败/取消，都停止前台服务
+      await NativeForegroundService.stop();
     }
   }
 
   void clearError() {
     state = state.clearError();
+  }
+
+  void clearResults() {
+    state = GenerateState(prompt: state.prompt);
   }
 }
 

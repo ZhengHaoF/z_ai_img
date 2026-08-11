@@ -23,7 +23,7 @@ class ValidationException extends AppException {
 }
 
 class CancelException extends AppException {
-  CancelException([String message = '请求已取消']) : super(message);
+  CancelException([super.message = '请求已取消']);
 }
 
 class CacheException extends AppException {

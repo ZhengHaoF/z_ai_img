@@ -4,13 +4,20 @@ import 'package:z_ai/models/image_result.dart';
 class ResultGrid extends StatelessWidget {
   final List<ImageResult> images;
   final ValueChanged<int>? onItemTap;
+
+  /// 保存单张图片。为 null 时不渲染保存按钮
+  /// （此前这里是一个不可点击的装饰图标，会误导用户以为能保存）。
+  final ValueChanged<int>? onItemSave;
   final VoidCallback? onClear;
+  final String title;
 
   const ResultGrid({
     super.key,
     required this.images,
     this.onItemTap,
+    this.onItemSave,
     this.onClear,
+    this.title = '生成结果',
   });
 
   @override
@@ -21,9 +28,9 @@ class ResultGrid extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text(
-              '生成结果',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            Text(
+              title,
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
             ),
             if (onClear != null)
               TextButton.icon(
@@ -55,6 +62,7 @@ class ResultGrid extends StatelessWidget {
                     Image.memory(
                       image.imageData,
                       fit: BoxFit.cover,
+                      cacheWidth: 400,
                       errorBuilder: (context, error, stackTrace) {
                         return Container(
                           color: Theme.of(context).colorScheme.errorContainer,
@@ -66,14 +74,30 @@ class ResultGrid extends StatelessWidget {
                         );
                       },
                     ),
-                    const Positioned(
-                      right: 4,
-                      bottom: 4,
-                      child: Icon(
-                        Icons.save_alt,
-                        size: 18,
+                    if (onItemSave != null)
+                      Positioned(
+                        right: 4,
+                        bottom: 4,
+                        child: Material(
+                          color: Colors.black.withValues(alpha: 0.45),
+                          shape: const CircleBorder(),
+                          clipBehavior: Clip.antiAlias,
+                          child: IconButton(
+                            icon: const Icon(
+                              Icons.save_alt,
+                              size: 18,
+                              color: Colors.white,
+                            ),
+                            tooltip: '保存到本地',
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints.tightFor(
+                              width: 32,
+                              height: 32,
+                            ),
+                            onPressed: () => onItemSave!(index),
+                          ),
+                        ),
                       ),
-                    ),
                   ],
                 ),
               ),

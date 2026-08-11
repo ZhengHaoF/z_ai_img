@@ -1,7 +1,6 @@
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import '../../models/image_result.dart';
-import '../../utils/image_utils.dart';
+import '../../widgets/common/feedback.dart';
 
 class ImagePreviewPage extends StatefulWidget {
   final List<ImageResult> images;
@@ -51,7 +50,8 @@ class _ImagePreviewPageState extends State<ImagePreviewPage> {
               actions: [
                 IconButton(
                   icon: const Icon(Icons.save_alt, color: Colors.white),
-                  onPressed: () => _saveImage(),
+                  tooltip: '保存到本地',
+                  onPressed: _saveImage,
                 ),
               ],
             )
@@ -76,9 +76,12 @@ class _ImagePreviewPageState extends State<ImagePreviewPage> {
                     child: Image.memory(
                       image.imageData,
                       fit: BoxFit.contain,
+                      cacheWidth: (MediaQuery.of(context).size.width *
+                              MediaQuery.of(context).devicePixelRatio)
+                          .round(),
                       errorBuilder: (context, error, stackTrace) {
                         return Container(
-                          color: Colors.red.withOpacity(0.2),
+                          color: Colors.red.withValues(alpha: 0.2),
                           child: const Icon(Icons.broken_image, color: Colors.white70, size: 48),
                         );
                       },
@@ -139,7 +142,7 @@ class _ImagePreviewPageState extends State<ImagePreviewPage> {
                   '双指缩放 · 点击切换',
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                    color: Colors.white.withOpacity(0.5),
+                    color: Colors.white.withValues(alpha: 0.5),
                     fontSize: 12,
                   ),
                 ),
@@ -150,17 +153,10 @@ class _ImagePreviewPageState extends State<ImagePreviewPage> {
     );
   }
 
-  Future<void> _saveImage() async {
-    final currentImage = widget.images[_currentIndex];
-    final success = await ImageUtils.saveImage(currentImage.imageData);
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(success ? '保存成功' : '保存失败'),
-          behavior: SnackBarBehavior.floating,
-          backgroundColor: success ? Colors.green : Colors.red,
-        ),
-      );
-    }
+  Future<void> _saveImage() {
+    return saveImageWithFeedback(
+      context,
+      widget.images[_currentIndex].imageData,
+    );
   }
 }

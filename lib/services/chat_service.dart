@@ -13,13 +13,18 @@ class ChatService {
   LogCallback? _onLog;
   final Map<String, DateTime> _requestTimestamps = {};
 
+  // 这里无法使用初始化形参（this._dio / this._onLog）：
+  // Dart 不允许具名参数以下划线开头，因此 prefer_initializing_formals 在此为误报。
   ChatService({
     required Dio dio,
     String? baseUrl,
     String? apiKey,
     LogCallback? onLog,
-  })  : _dio = dio,
+  })
+      // ignore: prefer_initializing_formals
+      : _dio = dio,
         _baseUrl = baseUrl ?? ApiConfig.chatBaseUrl,
+        // ignore: prefer_initializing_formals
         _onLog = onLog {
     if (apiKey != null && apiKey.isNotEmpty) {
       _dio.options.headers['Authorization'] = 'Bearer $apiKey';
@@ -41,6 +46,10 @@ class ChatService {
 
   void setLogCallback(LogCallback? callback) {
     _onLog = callback;
+  }
+
+  void dispose() {
+    _dio.close(force: true);
   }
 
   Future<ChatResponse> sendMessage({
@@ -66,8 +75,8 @@ class ChatService {
         timestamp: DateTime.now(),
         method: 'POST',
         url: url,
-        headers: Map<String, dynamic>.from(_dio.options.headers),
-        data: request.toJson(),
+        headers: sanitizeHeaders(_dio.options.headers),
+        data: truncateLogData(request.toJson()),
       ),
     );
 
@@ -88,7 +97,8 @@ class ChatService {
           method: 'POST',
           url: url,
           statusCode: response.statusCode,
-          data: response.data,
+          headers: sanitizeHeaders(response.requestOptions.headers),
+          data: truncateLogData(response.data),
           duration: duration,
         ),
       );
@@ -105,6 +115,7 @@ class ChatService {
           method: 'POST',
           url: url,
           statusCode: e.response?.statusCode,
+          headers: sanitizeHeaders(e.requestOptions.headers),
           errorMessage: e.message ?? '网络请求失败',
           duration: duration,
         ),

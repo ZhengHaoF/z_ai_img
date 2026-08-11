@@ -158,9 +158,10 @@ class ForegroundService {
     if (!PlatformCapabilities.supportsNotifications) return;
     try {
       await initialize();
+      await _ensureChannel();
       const androidDetails = AndroidNotificationDetails(
-        'generating_channel',
-        '图片生成',
+        'generating_channel_v2',
+        '图片生成进度',
         channelDescription: '显示图片生成进度',
         importance: Importance.high,
         priority: Priority.high,

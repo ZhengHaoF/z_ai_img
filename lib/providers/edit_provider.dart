@@ -9,6 +9,7 @@ import '../models/edit/edit_request.dart';
 import '../models/image_result.dart';
 import '../providers/settings_provider.dart';
 import '../repositories/image_repository.dart';
+import '../utils/native_foreground_service.dart';
 
 class EditState {
   final List<ImageResult> images;
@@ -113,10 +114,15 @@ class EditNotifier extends StateNotifier<EditState> {
     final count = n ?? profile.defaultCount;
 
     state = state.copyWith(
-      images: const [],
       isLoading: true,
       error: null,
       prompt: prompt,
+    );
+
+    // 启动 Android 原生前台服务保活，防止切后台被系统杀死
+    await NativeForegroundService.start(
+      title: '🖌️ 正在编辑图片',
+      body: 'AI 正在处理，请稍候...',
     );
 
     try {
@@ -136,24 +142,37 @@ class EditNotifier extends StateNotifier<EditState> {
       );
 
       state = state.copyWith(
-        images: images,
+        images: state.images + images,
         isLoading: false,
       );
     } on AppException catch (e) {
-      state = state.copyWith(
-        isLoading: false,
-        error: e.message,
-      );
+      // 取消（CancelException）不算错误，不弹错误横幅，仅结束 loading。
+      if (e is CancelException) {
+        state = state.copyWith(isLoading: false);
+      } else {
+        state = state.copyWith(isLoading: false, error: e.message);
+      }
     } catch (e) {
       state = state.copyWith(
         isLoading: false,
         error: e.toString(),
       );
+    } finally {
+      // 无论成功/失败/取消，都停止前台服务
+      await NativeForegroundService.stop();
     }
   }
 
   void clearError() {
     state = state.clearError();
+  }
+
+  /// 清空编辑结果（保留已选源图片和遮罩）
+  void clearResults() {
+    state = state.copyWith(
+      images: [],
+      error: null,
+    );
   }
 
   /// 选择源图片（支持多选）
@@ -207,10 +226,15 @@ class EditNotifier extends StateNotifier<EditState> {
   }
 
   /// 移除遮罩图片
+  /// 注意：EditState.copyWith 使用 `?? this.xxx` 语义，传 null 会被当成"不更新"，
+  /// 因此这里直接构造新状态，确保 maskImage / maskImagePath 真正被置空。
   void clearMaskImage() {
-    state = state.copyWith(
-      maskImage: null,
-      maskImagePath: null,
+    state = EditState(
+      images: state.images,
+      isLoading: state.isLoading,
+      prompt: state.prompt,
+      selectedImagePaths: state.selectedImagePaths,
+      selectedImages: state.selectedImages,
     );
   }
 

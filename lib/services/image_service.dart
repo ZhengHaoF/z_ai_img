@@ -1,4 +1,3 @@
-import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import '../config/api_config.dart';
 import '../models/generate/generate_request.dart';

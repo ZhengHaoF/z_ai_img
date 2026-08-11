@@ -26,6 +26,12 @@ class _HomePageState extends ConsumerState<HomePage> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    // 玻璃背景色与导航栏前景色随明暗主题切换，避免深色模式下白底白字看不清。
+    final glassColor =
+        (isDark ? Colors.black : Colors.white).withValues(alpha: 0.72);
+    final navForeground = isDark ? Colors.white : Colors.black;
+
     return Scaffold(
       extendBody: true,
       appBar: AppBar(
@@ -45,7 +51,7 @@ class _HomePageState extends ConsumerState<HomePage> {
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
             child: ColoredBox(
-              color: Colors.white.withValues(alpha: 0.72),
+              color: glassColor,
             ),
           ),
         ),
@@ -69,7 +75,6 @@ class _HomePageState extends ConsumerState<HomePage> {
           );
         },
         child: IndexedStack(
-          key: ValueKey<int>(_currentIndex),
           index: _currentIndex,
           children: _pages,
         ),
@@ -79,16 +84,20 @@ class _HomePageState extends ConsumerState<HomePage> {
           filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
           child: Container(
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.72),
+              color: glassColor,
             ),
             child: Theme(
               data: Theme.of(context).copyWith(
                 navigationBarTheme: NavigationBarThemeData(
                   labelTextStyle: WidgetStateProperty.resolveWith((states) {
                     if (states.contains(WidgetState.selected)) {
-                      return TextStyle(fontSize: 10, color: Colors.black.withValues(alpha: 0.55));
+                      return TextStyle(
+                          fontSize: 10,
+                          color: navForeground.withValues(alpha: 0.55));
                     }
-                    return TextStyle(fontSize: 10, color: Colors.black.withValues(alpha: 0.35));
+                    return TextStyle(
+                        fontSize: 10,
+                        color: navForeground.withValues(alpha: 0.35));
                   }),
                 ),
               ),
