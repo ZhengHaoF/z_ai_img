@@ -185,10 +185,8 @@ class EditNotifier extends StateNotifier<EditState> {
       final updated = List<Uint8List>.from(state.selectedImages)..addAll(images);
       // 同时追加路径（非 web 端有路径）
       final updatedPaths = List<String>.from(state.selectedImagePaths);
-      if (!kIsWeb) {
-        for (int i = 0; i < images.length; i++) {
-          updatedPaths.add('source_${state.selectedImagePaths.length + i}');
-        }
+      for (int i = 0; i < images.length; i++) {
+        updatedPaths.add('source_${state.selectedImagePaths.length + i}');
       }
 
       state = state.copyWith(
@@ -217,7 +215,7 @@ class EditNotifier extends StateNotifier<EditState> {
 
       state = state.copyWith(
         maskImage: image,
-        maskImagePath: kIsWeb ? 'mask_web' : 'mask_local',
+        maskImagePath: 'mask_local',
         error: null,
       );
     } catch (e) {

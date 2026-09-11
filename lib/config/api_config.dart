@@ -3,24 +3,18 @@ class ApiProfile {
   final String name;
   final String apiKey;
   final String baseUrl;
-  final String? chatBaseUrl;
   final String defaultModel;
   final String defaultSize;
   final int defaultCount;
-  final String defaultChatModel;
-  final double defaultTemperature;
 
   const ApiProfile({
     required this.id,
     required this.name,
     required this.apiKey,
     required this.baseUrl,
-    this.chatBaseUrl,
     this.defaultModel = 'gpt-image-2',
     this.defaultSize = '1024x1024',
     this.defaultCount = 1,
-    this.defaultChatModel = 'gpt-4o',
-    this.defaultTemperature = 0.7,
   });
 
   ApiProfile copyWith({
@@ -28,24 +22,18 @@ class ApiProfile {
     String? name,
     String? apiKey,
     String? baseUrl,
-    String? chatBaseUrl,
     String? defaultModel,
     String? defaultSize,
     int? defaultCount,
-    String? defaultChatModel,
-    double? defaultTemperature,
   }) {
     return ApiProfile(
       id: id ?? this.id,
       name: name ?? this.name,
       apiKey: apiKey ?? this.apiKey,
       baseUrl: baseUrl ?? this.baseUrl,
-      chatBaseUrl: chatBaseUrl ?? this.chatBaseUrl,
       defaultModel: defaultModel ?? this.defaultModel,
       defaultSize: defaultSize ?? this.defaultSize,
       defaultCount: defaultCount ?? this.defaultCount,
-      defaultChatModel: defaultChatModel ?? this.defaultChatModel,
-      defaultTemperature: defaultTemperature ?? this.defaultTemperature,
     );
   }
 
@@ -55,12 +43,9 @@ class ApiProfile {
       'name': name,
       'apiKey': apiKey,
       'baseUrl': baseUrl,
-      if (chatBaseUrl != null) 'chatBaseUrl': chatBaseUrl,
       'defaultModel': defaultModel,
       'defaultSize': defaultSize,
       'defaultCount': defaultCount,
-      'defaultChatModel': defaultChatModel,
-      'defaultTemperature': defaultTemperature,
     };
   }
 
@@ -70,35 +55,10 @@ class ApiProfile {
       name: json['name'] as String? ?? json['id'] as String? ?? '',
       apiKey: json['apiKey'] as String? ?? '',
       baseUrl: json['baseUrl'] as String? ?? '',
-      chatBaseUrl: json['chatBaseUrl'] as String?,
       defaultModel: json['defaultModel'] as String? ?? 'gpt-image-2',
       defaultSize: json['defaultSize'] as String? ?? '1024x1024',
       defaultCount: (json['defaultCount'] as int?) ?? 1,
-      defaultChatModel: json['defaultChatModel'] as String? ?? 'gpt-4o',
-      defaultTemperature: (json['defaultTemperature'] as num?)?.toDouble() ?? 0.7,
     );
-  }
-
-  String resolveChatBaseUrl() {
-    final trimmed = chatBaseUrl?.trim();
-    if (trimmed != null && trimmed.isNotEmpty) return trimmed;
-
-    final normalized = baseUrl.trim();
-    if (normalized.isEmpty) return ApiConfig.chatBaseUrl;
-
-    if (normalized.contains('/v1/chat')) {
-      return normalized;
-    }
-
-    if (normalized.endsWith('/v1/images')) {
-      return '${normalized.replaceAll('/v1/images', '')}/v1/chat';
-    }
-
-    if (normalized.endsWith('/v1/images/')) {
-      return '${normalized.replaceAll('/v1/images/', '')}/v1/chat';
-    }
-
-    return normalized;
   }
 }
 
@@ -154,40 +114,6 @@ class ApiConfig {
   static const int maxPromptLength = 1000;
   static const int maxEditPromptLength = 32000;
 
-  // 对话 API 地址
-  static const String chatBaseUrl = 'https://jeniya.top';
-
-  // 对话 API 端点
-  static const String chatCompletionsEndpoint = '/v1/chat/completions';
-
-  static String resolveChatBaseUrl(String baseUrl) {
-    final normalized = baseUrl.trim();
-    if (normalized.isEmpty) return chatBaseUrl;
-
-    if (normalized.contains('/v1/chat')) {
-      return normalized;
-    }
-
-    if (normalized.endsWith('/v1/images')) {
-      return '${normalized.replaceAll('/v1/images', '')}/v1/chat';
-    }
-
-    if (normalized.endsWith('/v1/images/')) {
-      return '${normalized.replaceAll('/v1/images/', '')}/v1/chat';
-    }
-
-    return normalized;
-  }
-
-  // 对话模型选项
-  static const List<String> chatModels = ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo'];
-
-  // 默认对话模型
-  static const String defaultChatModel = 'gpt-4o';
-
-  // 默认温度
-  static const double defaultTemperature = 0.7;
-
   // LRU 缓存上限
   static const int maxImageCacheSize = 20;
 
@@ -203,8 +129,6 @@ class ApiConfig {
       defaultModel: 'gpt-image-2',
       defaultSize: '1024x1024',
       defaultCount: 1,
-      defaultChatModel: 'gpt-4o',
-      defaultTemperature: 0.7,
     );
   }
 

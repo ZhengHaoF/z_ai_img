@@ -8,6 +8,12 @@ class ImageStorage {
   ImageStorage(this.directory, {this.maxCacheSizeMB = 500});
 
   Future<String> save(String id, Uint8List data) async {
+    // 目录可能尚未创建（首次写入 / 被系统清理），这里做兜底创建，
+    // 否则 writeAsBytes 会因父目录不存在而抛错，缓存静默失效。
+    if (!await directory.exists()) {
+      await directory.create(recursive: true);
+    }
+
     final file = File('${directory.path}/$id.png');
     await file.writeAsBytes(data);
     _scheduleEviction();

@@ -1,11 +1,12 @@
-import 'dart:typed_data';
+import 'dart:io';
 import 'package:flutter/foundation.dart';
+import 'package:gal/gal.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
 
-// 项目已明确不支持 Web 端（放弃 Web 平台），仅保留非 Web 实现的图片工具。
-import 'image_utils_nonweb.dart';
-
+/// 图片选择 / 保存工具（仅 iOS / Android / Windows / macOS / Linux）。
 class ImageUtils {
   static final ImagePicker _imagePicker = ImagePicker();
 
@@ -65,9 +66,51 @@ class ImageUtils {
     return results;
   }
 
-  // 保存图片（Web端下载，移动端保存到相册）
+  // 保存图片（移动端写入系统相册）
   static Future<bool> saveImage(Uint8List imageData, {String? fileName}) async {
     final name = fileName ?? 'image_${DateTime.now().millisecondsSinceEpoch}.png';
-    return await platformSaveImage(imageData, name);
+    return _saveImageToGallery(imageData, name);
+  }
+
+  /// 移动端：申请相册权限 → 写临时文件 → 存入相册 → 删除临时文件。
+  /// 桌面端当前不支持保存，返回 false（调用方会给出失败提示）。
+  static Future<bool> _saveImageToGallery(
+    Uint8List imageData,
+    String fileName,
+  ) async {
+    try {
+      if (Platform.isAndroid || Platform.isIOS) {
+        PermissionStatus? status;
+        if (Platform.isAndroid) {
+          status = await Permission.photos.request();
+          if (status.isDenied || status.isPermanentlyDenied) {
+            status = await Permission.storage.request();
+          }
+        } else if (Platform.isIOS) {
+          status = await Permission.photos.request();
+        }
+
+        if (status != null && !status.isGranted) {
+          debugPrint('相册权限未授予');
+          return false;
+        }
+
+        final tempDir = await getTemporaryDirectory();
+        final filePath = '${tempDir.path}/$fileName';
+        final file = File(filePath);
+        await file.writeAsBytes(imageData);
+
+        await Gal.putImage(filePath, album: 'AI图片');
+
+        await file.delete();
+
+        return true;
+      }
+
+      return false;
+    } catch (e) {
+      debugPrint('Save image error: $e');
+      return false;
+    }
   }
 }

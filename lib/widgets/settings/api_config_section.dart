@@ -26,7 +26,6 @@ class _ApiConfigSectionState extends ConsumerState<ApiConfigSection> {
   final _profileNameController = TextEditingController();
   final _profileApiKeyController = TextEditingController();
   final _profileBaseUrlController = TextEditingController();
-  final _profileChatBaseUrlController = TextEditingController();
   bool _obscureApiKey = true;
   String? _lastSignature;
 
@@ -46,14 +45,13 @@ class _ApiConfigSectionState extends ConsumerState<ApiConfigSection> {
   }
 
   String _editableSignature(ApiProfile? p) =>
-      '${p?.id}::${p?.name}::${p?.apiKey}::${p?.baseUrl}::${p?.chatBaseUrl}';
+      '${p?.id}::${p?.name}::${p?.apiKey}::${p?.baseUrl}';
 
   @override
   void dispose() {
     _profileNameController.dispose();
     _profileApiKeyController.dispose();
     _profileBaseUrlController.dispose();
-    _profileChatBaseUrlController.dispose();
     super.dispose();
   }
 
@@ -62,13 +60,11 @@ class _ApiConfigSectionState extends ConsumerState<ApiConfigSection> {
       _profileNameController.text = '';
       _profileApiKeyController.text = '';
       _profileBaseUrlController.text = ApiConfig.defaultBaseUrl;
-      _profileChatBaseUrlController.text = '';
       return;
     }
     _profileNameController.text = profile.name;
     _profileApiKeyController.text = profile.apiKey;
     _profileBaseUrlController.text = profile.baseUrl;
-    _profileChatBaseUrlController.text = profile.chatBaseUrl ?? '';
   }
 
   void _saveProfile(SettingsNotifier notifier, ApiProfile profile) {
@@ -77,9 +73,6 @@ class _ApiConfigSectionState extends ConsumerState<ApiConfigSection> {
         name: _profileNameController.text.trim(),
         apiKey: _profileApiKeyController.text,
         baseUrl: _profileBaseUrlController.text.trim(),
-        chatBaseUrl: _profileChatBaseUrlController.text.trim().isEmpty
-            ? null
-            : _profileChatBaseUrlController.text.trim(),
       );
       notifier.updateProfile(updated);
       showAppSnackBar(context, 'API 配置已保存', kind: FeedbackKind.success);
@@ -222,14 +215,6 @@ class _ApiConfigSectionState extends ConsumerState<ApiConfigSection> {
                   validator: Validators.validateBaseUrl,
                 ),
                 const SizedBox(height: 16),
-                TextFormField(
-                  controller: _profileChatBaseUrlController,
-                  decoration: const InputDecoration(
-                    labelText: '对话 Base URL（可选）',
-                    hintText: '留空则自动从 Base URL 推导',
-                  ),
-                ),
-                const SizedBox(height: 16),
                 const Text(
                   '默认生图参数',
                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
@@ -285,58 +270,6 @@ class _ApiConfigSectionState extends ConsumerState<ApiConfigSection> {
                           : () {
                               notifier.updateProfile(profile.copyWith(
                                   defaultCount: profile.defaultCount + 1));
-                            },
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                const Text(
-                  '默认对话参数',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                ),
-                const SizedBox(height: 16),
-                DropdownButtonFormField<String>(
-                  initialValue: profile.defaultChatModel,
-                  decoration: const InputDecoration(labelText: '默认对话模型'),
-                  items: ApiConfig.chatModels
-                      .map((model) =>
-                          DropdownMenuItem(value: model, child: Text(model)))
-                      .toList(),
-                  onChanged: (value) {
-                    if (value != null) {
-                      notifier.updateProfile(
-                          profile.copyWith(defaultChatModel: value));
-                    }
-                  },
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    const Expanded(child: Text('默认温度')),
-                    IconButton(
-                      icon: const Icon(Icons.remove),
-                      onPressed: profile.defaultTemperature <= 0
-                          ? null
-                          : () {
-                              notifier.updateProfile(profile.copyWith(
-                                defaultTemperature:
-                                    (profile.defaultTemperature - 0.1).clamp(0.0, 2.0),
-                              ));
-                            },
-                    ),
-                    Text(
-                      profile.defaultTemperature.toStringAsFixed(1),
-                      style: const TextStyle(fontSize: 16),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.add),
-                      onPressed: profile.defaultTemperature >= 2
-                          ? null
-                          : () {
-                              notifier.updateProfile(profile.copyWith(
-                                defaultTemperature:
-                                    (profile.defaultTemperature + 0.1).clamp(0.0, 2.0),
-                              ));
                             },
                     ),
                   ],

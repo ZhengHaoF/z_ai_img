@@ -8,9 +8,8 @@ class ForegroundServiceImpl implements IForegroundService {
 
   @override
   bool get isSupported =>
-      !kIsWeb &&
-      (defaultTargetPlatform == TargetPlatform.android ||
-          defaultTargetPlatform == TargetPlatform.iOS);
+      defaultTargetPlatform == TargetPlatform.android ||
+      defaultTargetPlatform == TargetPlatform.iOS;
 
   @override
   Future<bool> requestPermission() async {

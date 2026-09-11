@@ -1,6 +1,4 @@
 import 'dart:convert';
-import 'dart:io';
-import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../config/api_config.dart';
@@ -8,7 +6,6 @@ import '../core/platform/platform_capabilities.dart';
 import '../core/storage/image_storage.dart';
 import '../repositories/image_repository.dart';
 import '../services/api_client.dart';
-import '../services/chat_service.dart';
 import '../services/image_service.dart';
 import 'network_log_provider.dart';
 
@@ -18,8 +15,11 @@ final sharedPreferencesProvider = Provider<SharedPreferences>((ref) {
 });
 
 // Image storage provider
+// 磁盘图片缓存的目录需在运行时从 path_provider 解析（异步），
+// 因此与 sharedPreferencesProvider 一样，由 AppBootstrap 在启动时 override，
+// 默认实现直接抛错，避免再退化成 Directory('') 这种无效路径。
 final imageStorageProvider = Provider<ImageStorage>((ref) {
-  return ImageStorage(Directory(''));
+  throw UnimplementedError('imageStorageProvider must be overridden');
 });
 
 class SettingsState {
@@ -219,6 +219,8 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
     await _prefs.remove(ApiConfig.sharedActiveProfileIdKey);
     await _prefs.remove('baseUrl');
     await _prefs.remove('apiKey');
+    // 历史遗留：对话功能已移除，顺带清理旧的对话历史缓存。
+    await _prefs.remove('chat_history');
     state = SettingsState(
       apiProfiles: [ApiConfig.defaultProfile()],
       activeProfileId: ApiConfig.defaultProfile().id,
@@ -293,48 +295,3 @@ final imageRepositoryProvider = Provider<ImageRepository>((ref) {
   return ImageRepository(imageService, apiClient, storage);
 });
 
-// Chat Service provider
-// 同样只依赖 activeProfile 的 (chatBaseUrl, apiKey) 组合键，避免无关设置改动触发重建。
-final chatServiceProvider = Provider<ChatService>((ref) {
-  final key = ref.watch(
-    settingsProvider.select((s) {
-      final p = s.activeProfile();
-      return p == null
-          ? null
-          : (baseUrl: p.resolveChatBaseUrl(), apiKey: p.apiKey);
-    }),
-  );
-  final baseUrl = key?.baseUrl ?? ApiConfig.defaultBaseUrl;
-  final apiKey = key?.apiKey ?? '';
-
-  final dio = Dio(
-    BaseOptions(
-      baseUrl: baseUrl,
-      connectTimeout: ApiConfig.connectTimeout,
-      receiveTimeout: ApiConfig.receiveTimeout,
-    ),
-  );
-  final service = ChatService(
-    dio: dio,
-    baseUrl: baseUrl,
-    apiKey: apiKey,
-    onLog: (log) {
-      ref.read(networkLogProvider.notifier).addLog(log);
-    },
-  );
-  ref.onDispose(service.dispose);
-  ref.listen<({String baseUrl, String apiKey})?>(
-    settingsProvider.select((s) {
-      final p = s.activeProfile();
-      return p == null
-          ? null
-          : (baseUrl: p.resolveChatBaseUrl(), apiKey: p.apiKey);
-    }),
-    (prev, next) {
-      if (next == null) return;
-      service.updateApiKey(next.apiKey);
-      service.updateBaseUrl(next.baseUrl);
-    },
-  );
-  return service;
-});

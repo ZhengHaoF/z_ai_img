@@ -8,7 +8,6 @@ class NativeForegroundService {
 
   /// 启动前台保活服务
   static Future<bool> start({String title = 'AI 任务进行中', String body = '请稍候...'}) async {
-    if (kIsWeb) return false;
     try {
       final result = await _channel.invokeMethod<bool>('start', {
         'title': title,
@@ -23,7 +22,6 @@ class NativeForegroundService {
 
   /// 停止前台保活服务
   static Future<bool> stop() async {
-    if (kIsWeb) return false;
     try {
       final result = await _channel.invokeMethod<bool>('stop');
       return result ?? false;

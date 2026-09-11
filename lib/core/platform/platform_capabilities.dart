@@ -1,9 +1,10 @@
 import 'dart:io';
-import 'package:flutter/foundation.dart';
 
+/// 平台能力检测。
+///
+/// 项目已明确放弃 Web 平台（仅支持 iOS / Android / Windows / macOS / Linux），
+/// 因此这里不再需要 `!kIsWeb` 之类的前置判断，能力位只按「桌面 / 移动」区分。
 class PlatformCapabilities {
-  static bool get isWeb => kIsWeb;
-
   static bool get isDesktop =>
       Platform.isWindows || Platform.isMacOS || Platform.isLinux;
 
@@ -19,14 +20,8 @@ class PlatformCapabilities {
 
   static bool get isIOS => Platform.isIOS;
 
-  static bool get supportsNotifications => !kIsWeb;
-
-  static bool get supportsSystemTray => !kIsWeb && isDesktop;
+  static bool get supportsSystemTray => isDesktop;
 
   static bool get supportsForegroundService =>
-      !kIsWeb && (Platform.isAndroid || Platform.isIOS);
-
-  static bool get supportsNativeShare => !kIsWeb;
-
-  static bool get supportsFilePicker => !kIsWeb;
+      Platform.isAndroid || Platform.isIOS;
 }

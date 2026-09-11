@@ -1,7 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:permission_handler/permission_handler.dart';
-import '../core/platform/platform_capabilities.dart';
 
 /// 前台通知服务 - 用于后台保活和进度通知
 class ForegroundService {
@@ -13,8 +12,6 @@ class ForegroundService {
 
   /// 请求通知权限
   static Future<bool> requestPermission() async {
-    if (!PlatformCapabilities.supportsNotifications) return false;
-
     try {
       await initialize();
       
@@ -66,11 +63,6 @@ class ForegroundService {
     String? title,
     String? body,
   }) async {
-    if (!PlatformCapabilities.supportsNotifications) {
-      debugPrint('[ForegroundService] showGeneratingNotification 跳过: 当前平台不支持通知');
-      return;
-    }
-
     try {
       debugPrint('[ForegroundService] showGeneratingNotification 被调用');
       await initialize();
@@ -110,8 +102,6 @@ class ForegroundService {
     required String title,
     required String body,
   }) async {
-    if (!PlatformCapabilities.supportsNotifications) return;
-
     try {
       await initialize();
 
@@ -132,7 +122,6 @@ class ForegroundService {
 
   /// 取消所有通知
   static Future<void> cancelAll() async {
-    if (!PlatformCapabilities.supportsNotifications) return;
     try {
       await _notifications.cancelAll();
     } catch (e) {
@@ -142,7 +131,6 @@ class ForegroundService {
 
   /// 取消正在生成的通知
   static Future<void> cancelGenerating() async {
-    if (!PlatformCapabilities.supportsNotifications) return;
     try {
       await _notifications.cancel(_currentNotificationId);
     } catch (e) {
@@ -155,7 +143,6 @@ class ForegroundService {
     required String title,
     required String body,
   }) async {
-    if (!PlatformCapabilities.supportsNotifications) return;
     try {
       await initialize();
       await _ensureChannel();

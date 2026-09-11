@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../providers/chat_provider.dart';
 import '../../providers/settings_provider.dart';
 import '../common/confirm_dialog.dart';
 import '../common/feedback.dart';
 
-/// 设置页「数据管理」分区：清除设置 / 清空对话历史。
+/// 设置页「数据管理」分区：清除所有设置。
 class DataSection extends ConsumerWidget {
   const DataSection({super.key});
 
@@ -41,26 +40,6 @@ class DataSection extends ConsumerWidget {
                 await settingsNotifier.clearAll();
                 if (!context.mounted) return;
                 showAppSnackBar(context, '设置已清除', kind: FeedbackKind.success);
-              },
-            ),
-            const Divider(),
-            ListTile(
-              leading: const Icon(Icons.chat_outlined),
-              title: const Text('清空对话历史'),
-              subtitle: const Text('清除所有对话记录'),
-              contentPadding: EdgeInsets.zero,
-              onTap: () async {
-                final confirmed = await showConfirmDialog(
-                  context,
-                  title: '清空对话',
-                  content: '确定要清空所有对话记录吗？此操作不可恢复。',
-                  confirmText: '清空',
-                  isDestructive: true,
-                );
-                if (confirmed != true) return;
-                ref.read(chatProvider.notifier).clearChat();
-                if (!context.mounted) return;
-                showAppSnackBar(context, '对话已清空', kind: FeedbackKind.success);
               },
             ),
           ],
