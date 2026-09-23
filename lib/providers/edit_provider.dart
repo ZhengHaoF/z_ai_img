@@ -199,11 +199,16 @@ class EditNotifier extends StateNotifier<EditState> {
     }
   }
 
-  /// 清空已选源图片
+  /// 清空已选源图片。
+  ///
+  /// 源图片清空后遮罩已无意义（遮罩仅对第一张图生效），因此一并清空，
+  /// 避免 UI 状态不一致。
   void clearSourceImages() {
     state = state.copyWith(
       selectedImages: [],
       selectedImagePaths: [],
+      maskImage: null,
+      maskImagePath: null,
     );
   }
 
@@ -226,10 +231,12 @@ class EditNotifier extends StateNotifier<EditState> {
   /// 移除遮罩图片
   /// 注意：EditState.copyWith 使用 `?? this.xxx` 语义，传 null 会被当成"不更新"，
   /// 因此这里直接构造新状态，确保 maskImage / maskImagePath 真正被置空。
+  /// 同时显式保留 error，避免清空遮罩时错误横幅被一并清掉。
   void clearMaskImage() {
     state = EditState(
       images: state.images,
       isLoading: state.isLoading,
+      error: state.error,
       prompt: state.prompt,
       selectedImagePaths: state.selectedImagePaths,
       selectedImages: state.selectedImages,

@@ -1,6 +1,7 @@
+import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import '../config/api_config.dart';
 import '../core/storage/image_storage.dart';
 import '../exceptions/app_exception.dart';
@@ -115,12 +116,26 @@ class ImageRepository {
       _cache.remove(oldestId);
     }
 
-    _imageStorage.save(result.id, result.imageData);
+    // 磁盘写入是异步操作，这里不阻塞返回；但需捕获异常避免 unhandled async error。
+    unawaited(
+      _imageStorage
+          .save(result.id, result.imageData)
+          .then<void>((_) {})
+          .catchError((Object e) {
+        debugPrint('写入图片缓存失败: $e');
+      }),
+    );
   }
 
-  void clearCache() {
+  /// 清空内存缓存与磁盘缓存。
+  Future<void> clearCache() async {
     _cache.clear();
     _cacheOrder.clear();
+    try {
+      await _imageStorage.clear();
+    } catch (e) {
+      debugPrint('清空磁盘缓存失败: $e');
+    }
   }
 
   int get cacheSize => _cache.length;

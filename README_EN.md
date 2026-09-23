@@ -1,6 +1,6 @@
 # Z Ai
 
-**Z Ai** is a cross-platform AI image generation and editing app built with Flutter. Supports iOS, Android, macOS, Windows, and Linux.
+**Z Ai** is a cross-platform AI image generation and editing app built with Flutter. Supports Android and Windows.
 
 ## Core Features
 
@@ -20,19 +20,16 @@
 - **Local Storage**: shared_preferences ^2.5.3
 - **Image Handling**: image_picker ^1.1.2, file_picker ^8.1.7, gal ^2.3.0
 - **Platform Notifications**: flutter_local_notifications ^18.0.0
-- **Desktop Tray**: tray_manager ^0.2.3, window_manager ^0.4.3
+- **Desktop Tray**: tray_manager ^0.2.3
 
 ## Supported Platforms
 
 | Platform | Support |
 |----------|---------|
 | Android | Full support (including foreground service notifications) |
-| iOS | Full support (including foreground service notifications) |
-| macOS | Supported (system tray) |
-| Windows | Supported (system tray + window management) |
-| Linux | Supported (system tray) |
+| Windows | Supported (system tray) |
 
-> Web support has been dropped; there is no longer a web build target.
+> Web / iOS / macOS / Linux support has been dropped; there are no longer such build targets.
 
 ## Getting Started
 
@@ -65,17 +62,8 @@ flutter run
 # Android APK
 flutter build apk --release
 
-# iOS
-flutter build ios --release
-
 # Windows
 flutter build windows --release
-
-# macOS
-flutter build macos --release
-
-# Linux
-flutter build linux --release
 ```
 
 ## Project Structure

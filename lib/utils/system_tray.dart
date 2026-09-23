@@ -3,15 +3,13 @@ import 'package:flutter/foundation.dart';
 import 'package:tray_manager/tray_manager.dart';
 import '../core/platform/platform_capabilities.dart';
 
-/// 系统托盘管理器 - Windows/Mac/Linux 平台专用
+/// 系统托盘管理器 - Windows 平台专用
 ///
-/// 需要准备以下图标文件（放在 assets/icons/ 目录下）：
-/// - tray_idle.png    (灰色，空闲状态)
-/// - tray_loading.png (蓝色，加载中状态)
-/// - tray_completed.png (绿色，完成状态)
-/// - tray_error.png   (红色，错误状态)
-///
-/// 图标尺寸建议：16x16 或 32x32 像素
+/// 托盘图标位于 assets/icons/ 目录，Windows 使用多尺寸 .ico：
+/// - tray_idle.ico       (灰色画笔，空闲状态)
+/// - tray_loading.ico    (蓝色时钟，加载中状态)
+/// - tray_completed.ico  (绿色对勾，完成状态)
+/// - tray_error.ico      (红色感叹号，错误状态)
 class SystemTrayManager with TrayListener {
   SystemTrayManager._();
 
@@ -55,19 +53,20 @@ class SystemTrayManager with TrayListener {
     }
   }
 
-  /// 获取托盘图标路径
+  /// 获取托盘图标路径。
+  ///
+  /// Windows 使用 .ico（tray_manager 的 Windows 实现通过 LoadImage 加载，
+  /// 多尺寸 .ico 兼容性最好）。
   String _getTrayIconPath(TrayIconType type) {
-    // 假设 assets 目录下有图标文件
-    // 实际项目中需要添加图标资源
     switch (type) {
       case TrayIconType.idle:
-        return 'assets/icons/tray_idle.png';
+        return 'assets/icons/tray_idle.ico';
       case TrayIconType.loading:
-        return 'assets/icons/tray_loading.png';
+        return 'assets/icons/tray_loading.ico';
       case TrayIconType.completed:
-        return 'assets/icons/tray_completed.png';
+        return 'assets/icons/tray_completed.ico';
       case TrayIconType.error:
-        return 'assets/icons/tray_error.png';
+        return 'assets/icons/tray_error.ico';
     }
   }
 

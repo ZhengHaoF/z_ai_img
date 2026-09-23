@@ -56,26 +56,9 @@ class _HomePageState extends ConsumerState<HomePage> {
         backgroundColor: Colors.transparent,
         elevation: 0,
       ),
-      body: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 200),
-        switchInCurve: Curves.easeInOut,
-        switchOutCurve: Curves.easeInOut,
-        transitionBuilder: (child, animation) {
-          return FadeTransition(
-            opacity: animation,
-            child: SlideTransition(
-              position: Tween<Offset>(
-                begin: const Offset(0, 0.05),
-                end: Offset.zero,
-              ).animate(animation),
-              child: child,
-            ),
-          );
-        },
-        child: IndexedStack(
-          index: _currentIndex,
-          children: _pages,
-        ),
+      body: FadeIndexedStack(
+        index: _currentIndex,
+        children: _pages,
       ),
       bottomNavigationBar: ClipRect(
         child: BackdropFilter(
@@ -169,6 +152,72 @@ class _AnimatedTabIcon extends StatelessWidget {
       duration: const Duration(milliseconds: 200),
       curve: Curves.elasticOut,
       child: child,
+    );
+  }
+}
+
+/// 带淡入淡出过渡的 IndexedStack。
+///
+/// 保留 IndexedStack 的子页面状态（输入框内容、滚动位置等），
+/// 并在切换 index 时对新的子页面做透明度过渡，替代 AnimatedSwitcher
+/// 因 child 类型不变而无法触发动画的问题。
+class FadeIndexedStack extends StatefulWidget {
+  final int index;
+  final List<Widget> children;
+
+  const FadeIndexedStack({
+    super.key,
+    required this.index,
+    required this.children,
+  });
+
+  @override
+  State<FadeIndexedStack> createState() => _FadeIndexedStackState();
+}
+
+class _FadeIndexedStackState extends State<FadeIndexedStack>
+    with TickerProviderStateMixin {
+  late int _currentIndex;
+  late final AnimationController _controller;
+  late Animation<double> _opacity;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentIndex = widget.index;
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 200),
+      value: 1.0,
+    );
+    _opacity = CurvedAnimation(parent: _controller, curve: Curves.easeInOut);
+  }
+
+  @override
+  void didUpdateWidget(FadeIndexedStack oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.index != _currentIndex) {
+      _currentIndex = widget.index;
+      _controller
+        ..reset()
+        ..forward();
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _opacity,
+      child: IndexedStack(
+        index: _currentIndex,
+        children: widget.children,
+      ),
     );
   }
 }

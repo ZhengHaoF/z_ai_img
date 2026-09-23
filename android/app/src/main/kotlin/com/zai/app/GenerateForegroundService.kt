@@ -48,14 +48,22 @@ class GenerateForegroundService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent?.action == ACTION_STOP) {
+        if (intent == null) {
+            // 系统异常重启时可能以 null intent 调用。
+            // 没有任务参数就没有意义，直接停止，避免出现"幽灵通知"。
             stopForeground(STOP_FOREGROUND_REMOVE)
             stopSelf()
             return START_NOT_STICKY
         }
 
-        val title = intent?.getStringExtra("title") ?: "AI 任务进行中"
-        val body = intent?.getStringExtra("body") ?: "请稍候..."
+        if (intent.action == ACTION_STOP) {
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            stopSelf()
+            return START_NOT_STICKY
+        }
+
+        val title = intent.getStringExtra("title") ?: "AI 任务进行中"
+        val body = intent.getStringExtra("body") ?: "请稍候..."
 
         val stopIntent = Intent(this, GenerateForegroundService::class.java).apply {
             action = ACTION_STOP
@@ -84,7 +92,9 @@ class GenerateForegroundService : Service() {
         } else {
             startForeground(NOTIFICATION_ID, notification)
         }
-        return START_STICKY
+        // 使用 START_NOT_STICKY：任务被系统杀死后不自动重启，
+        // 避免以 null intent 重启产生无意义的"幽灵通知"。
+        return START_NOT_STICKY
     }
 
     override fun onBind(intent: Intent?): IBinder? = null

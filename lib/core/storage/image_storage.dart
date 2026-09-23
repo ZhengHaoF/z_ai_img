@@ -66,17 +66,32 @@ class ImageStorage {
     }
 
     final files = directory.listSync().whereType<File>().toList();
+    if (files.isEmpty) return;
+
     files.sort((a, b) => a.lastModifiedSync().compareTo(b.lastModifiedSync()));
 
+    // 一次性统计总大小，避免每删一个文件都全目录遍历（O(n²)）。
+    final maxBytes = maxCacheSizeMB * 1024 * 1024;
+    var total = 0;
+    final sizes = <String, int>{};
     for (final file in files) {
       try {
+        final size = file.lengthSync();
+        sizes[file.path] = size;
+        total += size;
+      } catch (_) {
+        // 文件可能被并发删除，忽略并跳过。
+      }
+    }
+
+    for (final file in files) {
+      if (total <= maxBytes) break;
+      final size = sizes[file.path] ?? 0;
+      try {
         await file.delete();
+        total -= size;
       } catch (_) {
         // ignore
-      }
-      final sizeInBytes = await this.sizeInBytes;
-      if (sizeInBytes <= maxCacheSizeMB * 1024 * 1024) {
-        break;
       }
     }
   }

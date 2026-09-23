@@ -1,6 +1,6 @@
 # Z Ai
 
-**Z Ai** 是一个基于 Flutter 构建的跨平台 AI 图像生成与编辑应用。支持 iOS、Android、macOS、Windows、Linux 五端运行。
+**Z Ai** 是一个基于 Flutter 构建的跨平台 AI 图像生成与编辑应用。支持 Android、Windows 双端运行。
 
 ## 核心功能
 
@@ -20,19 +20,16 @@
 - **本地存储**: shared_preferences ^2.5.3
 - **图片处理**: image_picker ^1.1.2, file_picker ^8.1.7, gal ^2.3.0
 - **平台通知**: flutter_local_notifications ^18.0.0
-- **桌面托盘**: tray_manager ^0.2.3, window_manager ^0.4.3
+- **桌面托盘**: tray_manager ^0.2.3
 
 ## 支持的平台
 
 | 平台 | 支持情况 |
 |------|----------|
 | Android | 完整支持（含前台服务通知） |
-| iOS | 完整支持（含前台服务通知） |
-| macOS | 支持（系统托盘） |
-| Windows | 支持（系统托盘 + 窗口管理） |
-| Linux | 支持（系统托盘） |
+| Windows | 支持（系统托盘） |
 
-> 项目已放弃 Web 平台支持，不再提供 Web 构建目标。
+> 项目已放弃 Web / iOS / macOS / Linux 平台支持，不再提供相应构建目标。
 
 ## 快速开始
 
@@ -66,17 +63,8 @@ flutter run
 # Android APK
 flutter build apk --release
 
-# iOS
-flutter build ios --release
-
 # Windows
 flutter build windows --release
-
-# macOS
-flutter build macos --release
-
-# Linux
-flutter build linux --release
 ```
 
 ## 目录结构

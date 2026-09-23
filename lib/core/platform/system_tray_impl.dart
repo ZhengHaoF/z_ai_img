@@ -5,8 +5,7 @@ import '../../utils/system_tray.dart';
 
 class SystemTrayServiceImpl implements ISystemTrayService {
   @override
-  bool get isSupported =>
-      Platform.isWindows || Platform.isMacOS || Platform.isLinux;
+  bool get isSupported => Platform.isWindows;
 
   @override
   Future<void> initialize({

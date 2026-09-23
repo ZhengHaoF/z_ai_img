@@ -2,7 +2,7 @@
 
 ## 1. 项目概述
 
-**Z Ai** 是一个基于 Flutter 构建的跨平台 AI 图像生成与编辑应用。支持 iOS、Android、macOS、Windows、Linux 五端运行。
+**Z Ai** 是一个基于 Flutter 构建的跨平台 AI 图像生成与编辑应用。支持 Android、Windows 双端运行。
 
 ### 核心功能
 
@@ -26,9 +26,8 @@
 | 本地存储 | shared_preferences ^2.5.3 |
 | 图片处理 | image_picker ^1.1.2, file_picker ^8.1.7, gal ^2.3.0 |
 | 平台通知 | flutter_local_notifications ^18.0.0 |
-| 桌面托盘 | tray_manager ^0.2.3, window_manager ^0.4.3 |
+| 桌面托盘 | tray_manager ^0.2.3 |
 | 权限处理 | permission_handler ^12.0.3 |
-| 后台任务 | workmanager ^0.9.0+3 |
 
 ---
 
@@ -41,12 +40,7 @@ z_ai_img/
 │   │   ├── kotlin/com/zai/app/ # 前台服务 (GenerateForegroundService.kt)
 │   │   └── AndroidManifest.xml
 │   └── build.gradle.kts        # Gradle 构建配置
-├── ios/                        # iOS 平台配置
-│   ├── Runner/                 # Xcode 项目
-│   └── Runner.xcodeproj/
-├── macos/                      # macOS 平台配置
 ├── windows/                    # Windows 平台配置
-├── linux/                      # Linux 平台配置
 ├── lib/                        # ★ 核心业务代码
 │   ├── main.dart               # 应用入口
 │   ├── app.dart                # MaterialApp + 主题配置
@@ -185,7 +179,7 @@ void main() {
 2. 注册全局 Flutter 错误处理器
 3. 使用 `runZonedGuarded` 包裹整个初始化流程
 4. 获取 `SharedPreferences` 实例
-5. 初始化前台通知服务权限（仅 Android/iOS）
+5. 初始化前台通知服务权限（仅 Android）
 6. 初始化桌面系统托盘（仅桌面端且用户已开启）
 7. 启动 `ProviderScope` + `App` 组件
 
@@ -368,10 +362,10 @@ generateProvider / editProvider
 
 | 能力 | 判断逻辑 |
 |------|---------|
-| 系统托盘 | `isDesktop` |
-| 前台服务 | `Android || iOS` |
+| 系统托盘 | `isDesktop`（即 `Platform.isWindows`） |
+| 前台服务 | `Android` |
 
-> 项目已放弃 Web 平台，故不再有 `isWeb` / `!kIsWeb` 之类的判断。
+> 项目仅支持 Android / Windows，故没有 `isWeb` / `isIOS` / `isMacOS` / `isLinux` 之类的判断。
 
 #### [NativeForegroundService](d:\work\z_ai_img\lib\utils\native_foreground_service.dart)
 
@@ -381,7 +375,7 @@ generateProvider / editProvider
 
 #### [ImageUtils](d:\work\z_ai_img\lib\utils\image_utils.dart)
 
-图片工具（项目已放弃 Web 平台）：
+图片工具（仅支持 Android / Windows）：
 - 选择图片: 移动端使用 `image_picker`（相册/相机）；桌面端另有 `file_picker` 可从文件系统选取
 - 图片保存: 移动端写入系统相册（`gal`）；桌面端暂不支持，返回 `false`
 
@@ -621,7 +615,7 @@ Android 端通过 `MethodChannel` 桥接原生 `GenerateForegroundService.kt`，
 
 - Flutter SDK 3.12.2+
 - Dart SDK 3.12.2+
-- 各平台对应 SDK（开发移动端需 Xcode/Android Studio，桌面端需对应 IDE）
+- 各平台对应 SDK（Android 需 Android Studio，Windows 需 Visual Studio）
 
 ### 10.2 安装依赖
 
@@ -637,8 +631,6 @@ flutter run
 
 # 指定平台运行
 flutter run -d windows
-flutter run -d macos
-flutter run -d chrome
 flutter run -d emulator-5554  # Android 模拟器
 ```
 
@@ -651,17 +643,8 @@ flutter build apk --release
 # Android App Bundle
 flutter build appbundle --release
 
-# iOS
-flutter build ios --release
-
-# macOS
-flutter build macos --release
-
 # Windows
 flutter build windows --release
-
-# Linux
-flutter build linux --release
 ```
 
 ### 10.5 首次配置

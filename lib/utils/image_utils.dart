@@ -4,9 +4,8 @@ import 'package:gal/gal.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:permission_handler/permission_handler.dart';
 
-/// 图片选择 / 保存工具（仅 iOS / Android / Windows / macOS / Linux）。
+/// 图片选择 / 保存工具（仅 Android / Windows）。
 class ImageUtils {
   static final ImagePicker _imagePicker = ImagePicker();
 
@@ -73,26 +72,22 @@ class ImageUtils {
   }
 
   /// 移动端：申请相册权限 → 写临时文件 → 存入相册 → 删除临时文件。
-  /// 桌面端当前不支持保存，返回 false（调用方会给出失败提示）。
+  /// 桌面端（Windows）当前不支持保存，返回 false（调用方会给出失败提示）。
   static Future<bool> _saveImageToGallery(
     Uint8List imageData,
     String fileName,
   ) async {
     try {
-      if (Platform.isAndroid || Platform.isIOS) {
-        PermissionStatus? status;
-        if (Platform.isAndroid) {
-          status = await Permission.photos.request();
-          if (status.isDenied || status.isPermanentlyDenied) {
-            status = await Permission.storage.request();
+      if (Platform.isAndroid) {
+        // 使用 gal 自身的权限 API：它内部处理了 Android 各版本差异
+        // （API 30+ 走 MediaStore 无需权限；API 29 保存到相册需 WRITE_EXTERNAL_STORAGE；
+        //  API <= 28 需存储权限）。
+        if (!await Gal.hasAccess(toAlbum: true)) {
+          final granted = await Gal.requestAccess(toAlbum: true);
+          if (!granted) {
+            debugPrint('相册权限未授予');
+            return false;
           }
-        } else if (Platform.isIOS) {
-          status = await Permission.photos.request();
-        }
-
-        if (status != null && !status.isGranted) {
-          debugPrint('相册权限未授予');
-          return false;
         }
 
         final tempDir = await getTemporaryDirectory();

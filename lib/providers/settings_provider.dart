@@ -221,6 +221,9 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
     await _prefs.remove('apiKey');
     // 历史遗留：对话功能已移除，顺带清理旧的对话历史缓存。
     await _prefs.remove('chat_history');
+    // 外观与托盘开关同样需要重置，否则重启后会从持久化键恢复旧值。
+    await _prefs.remove('isDarkMode');
+    await _prefs.remove('showTrayIcon');
     state = SettingsState(
       apiProfiles: [ApiConfig.defaultProfile()],
       activeProfileId: ApiConfig.defaultProfile().id,

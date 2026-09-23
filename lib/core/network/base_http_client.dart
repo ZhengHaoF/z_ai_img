@@ -10,7 +10,11 @@ class BaseHttpClient {
   late final Dio _dio;
   late final Dio _downloadDio;
   final NetworkLogCallback? onLog;
-  final Map<String, DateTime> _requestTimestamps = {};
+
+  /// 请求唯一 ID 与发起时间的映射，用于计算耗时。
+  /// ID 存放在 requestOptions.extra 中，避免并发同 URL 请求互相串号。
+  final Map<int, DateTime> _requestTimestamps = {};
+  int _requestSeq = 0;
 
   BaseHttpClient({
     String? baseUrl,
@@ -55,12 +59,13 @@ class BaseHttpClient {
     _dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) {
-          final requestId = options.uri.toString();
+          final requestId = ++_requestSeq;
+          options.extra['request_id'] = requestId;
           _requestTimestamps[requestId] = DateTime.now();
           if (onLog != null) {
             onLog!(
               NetworkLog(
-                id: requestId,
+                id: requestId.toString(),
                 type: NetworkLogType.request,
                 timestamp: DateTime.now(),
                 method: options.method,
@@ -73,13 +78,15 @@ class BaseHttpClient {
           return handler.next(options);
         },
         onResponse: (response, handler) {
-          final requestId = response.requestOptions.uri.toString();
-          final startTime = _requestTimestamps.remove(requestId);
+          final requestId = response.requestOptions.extra['request_id'] as int?;
+          final startTime = requestId != null
+              ? _requestTimestamps.remove(requestId)
+              : null;
           final duration = startTime != null ? DateTime.now().difference(startTime) : null;
           if (onLog != null) {
             onLog!(
               NetworkLog(
-                id: requestId,
+                id: requestId?.toString() ?? response.requestOptions.uri.toString(),
                 type: NetworkLogType.response,
                 timestamp: DateTime.now(),
                 method: response.requestOptions.method,
@@ -94,13 +101,15 @@ class BaseHttpClient {
           return handler.next(response);
         },
         onError: (error, handler) {
-          final requestId = error.requestOptions.uri.toString();
-          final startTime = _requestTimestamps.remove(requestId);
+          final requestId = error.requestOptions.extra['request_id'] as int?;
+          final startTime = requestId != null
+              ? _requestTimestamps.remove(requestId)
+              : null;
           final duration = startTime != null ? DateTime.now().difference(startTime) : null;
           if (onLog != null) {
             onLog!(
               NetworkLog(
-                id: requestId,
+                id: requestId?.toString() ?? error.requestOptions.uri.toString(),
                 type: NetworkLogType.error,
                 timestamp: DateTime.now(),
                 method: error.requestOptions.method,
