@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
-import { AuthError, checkAuth, login, logout } from './api/client';
+import { onMounted, onBeforeUnmount, ref } from 'vue';
+import { AuthError, checkAuth, fetchTasks, login, logout } from './api/client';
 import GeneratePage from './pages/Generate.vue';
 import EditPage from './pages/Edit.vue';
 import TasksPage from './pages/Tasks.vue';
@@ -16,6 +16,8 @@ const checking = ref(true);
 const password = ref('');
 const loginError = ref('');
 const loggingIn = ref(false);
+const activeCount = ref(0);
+let activeTimer: number | null = null;
 
 function applyTheme() {
   document.documentElement.classList.toggle('dark', dark.value);
@@ -27,15 +29,45 @@ function toggleTheme() {
   applyTheme();
 }
 
+function stopActivePoll() {
+  if (activeTimer != null) {
+    window.clearInterval(activeTimer);
+    activeTimer = null;
+  }
+  activeCount.value = 0;
+}
+
+async function refreshActiveCount() {
+  try {
+    const data = await fetchTasks();
+    activeCount.value = data.tasks.filter(
+      (t) => t.status === 'queued' || t.status === 'running',
+    ).length;
+  } catch {
+    /* 未登录或瞬时失败忽略 */
+  }
+}
+
+function startActivePoll() {
+  stopActivePoll();
+  void refreshActiveCount();
+  activeTimer = window.setInterval(() => {
+    void refreshActiveCount();
+  }, 4000);
+}
+
 async function boot() {
   checking.value = true;
   loadError.value = '';
   try {
     const me = await checkAuth();
     authed.value = me.authenticated;
+    if (authed.value) startActivePoll();
+    else stopActivePoll();
   } catch (e) {
     if (e instanceof AuthError) authed.value = false;
     else loadError.value = (e as Error).message;
+    stopActivePoll();
   } finally {
     checking.value = false;
   }
@@ -61,6 +93,7 @@ async function onLogout() {
   } finally {
     authed.value = false;
     password.value = '';
+    stopActivePoll();
   }
 }
 
@@ -68,6 +101,8 @@ onMounted(() => {
   applyTheme();
   boot();
 });
+
+onBeforeUnmount(stopActivePoll);
 </script>
 
 <template>
@@ -105,7 +140,10 @@ onMounted(() => {
       <nav class="tabs">
         <button :class="{ primary: tab === 'generate' }" @click="tab = 'generate'">文生图</button>
         <button :class="{ primary: tab === 'edit' }" @click="tab = 'edit'">图编辑</button>
-        <button :class="{ primary: tab === 'tasks' }" @click="tab = 'tasks'">任务</button>
+        <button class="tab-btn" :class="{ primary: tab === 'tasks' }" @click="tab = 'tasks'">
+          任务
+          <span v-if="activeCount > 0" class="badge">{{ activeCount > 99 ? '99+' : activeCount }}</span>
+        </button>
         <button :class="{ primary: tab === 'gallery' }" @click="tab = 'gallery'">图库</button>
         <button :class="{ primary: tab === 'models' }" @click="tab = 'models'">模型管理</button>
         <button :class="{ primary: tab === 'logs' }" @click="tab = 'logs'">日志</button>
@@ -151,6 +189,24 @@ onMounted(() => {
 .tabs button {
   min-height: 40px;
   padding: 0.45rem 0.75rem;
+}
+.tab-btn {
+  position: relative;
+}
+.badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 11px;
+  line-height: 18px;
+  text-align: center;
+  box-sizing: border-box;
 }
 .login {
   max-width: 360px;

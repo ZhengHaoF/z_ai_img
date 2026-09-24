@@ -10,11 +10,13 @@ const modelId = ref('');
 const modelInfo = ref<ModelItem | null>(null);
 const size = ref('1024x1024');
 const n = ref(1);
-const busy = ref(false);
+/** 提交后短暂锁定按钮，不绑定任务跑完 */
+const submitting = ref(false);
 const error = ref('');
 const task = ref<Task | null>(null);
 const lightboxIndex = ref(-1);
 let timer: number | null = null;
+let unlockTimer: number | null = null;
 
 const isCompat = computed(() =>
   modelInfo.value?.protocol === 'compatible' ||
@@ -47,11 +49,22 @@ function stopPoll() {
   }
 }
 
+function armUnlock() {
+  if (unlockTimer != null) window.clearTimeout(unlockTimer);
+  unlockTimer = window.setTimeout(() => {
+    submitting.value = false;
+    unlockTimer = null;
+  }, 3000);
+}
+
+function isTaskLive(t: Task) {
+  return t.status === 'queued' || t.status === 'running';
+}
+
 async function poll(id: string) {
   const t = await fetchTask(id);
   task.value = t;
-  if (t.status === 'succeeded' || t.status === 'failed' || t.status === 'canceled') {
-    busy.value = false;
+  if (!isTaskLive(t)) {
     stopPoll();
     localStorage.removeItem('z_ai_last_task');
   }
@@ -59,6 +72,7 @@ async function poll(id: string) {
 
 async function onSubmit() {
   error.value = '';
+  if (submitting.value) return;
   if (!prompt.value.trim()) {
     error.value = '请输入提示词';
     return;
@@ -67,7 +81,8 @@ async function onSubmit() {
     error.value = '请选择模型';
     return;
   }
-  busy.value = true;
+  submitting.value = true;
+  armUnlock();
   try {
     const res = await submitTask({
       type: 'generate',
@@ -87,7 +102,11 @@ async function onSubmit() {
     await poll(res.id);
   } catch (e) {
     error.value = (e as Error).message;
-    busy.value = false;
+    submitting.value = false;
+    if (unlockTimer != null) {
+      window.clearTimeout(unlockTimer);
+      unlockTimer = null;
+    }
   }
 }
 
@@ -95,7 +114,6 @@ async function onCancel() {
   if (!task.value) return;
   try {
     task.value = await cancelTask(task.value.id);
-    busy.value = false;
     stopPoll();
   } catch (e) {
     error.value = (e as Error).message;
@@ -108,8 +126,7 @@ onMounted(async () => {
     try {
       const t = await fetchTask(last);
       task.value = t;
-      if (t.status === 'queued' || t.status === 'running') {
-        busy.value = true;
+      if (isTaskLive(t)) {
         stopPoll();
         timer = window.setInterval(() => {
           poll(last).catch(() => {});
@@ -121,7 +138,10 @@ onMounted(async () => {
   }
 });
 
-onBeforeUnmount(stopPoll);
+onBeforeUnmount(() => {
+  stopPoll();
+  if (unlockTimer != null) window.clearTimeout(unlockTimer);
+});
 </script>
 
 <template>
@@ -135,7 +155,7 @@ onBeforeUnmount(stopPoll);
       <textarea v-model="prompt" rows="5" maxlength="1000" placeholder="描述你想生成的画面…"></textarea>
     </div>
     <div class="row">
-      <ModelSelect v-model="modelId" :disabled="busy" @change="onModelChange" />
+      <ModelSelect v-model="modelId" :disabled="submitting" @change="onModelChange" />
       <div class="field">
         <label>尺寸</label>
         <select v-model="size">
@@ -148,15 +168,17 @@ onBeforeUnmount(stopPoll);
       </div>
     </div>
     <div class="row" style="align-items: center">
-      <button class="primary" :disabled="busy" @click="onSubmit">
-        {{ busy ? '生成中…' : '生成图片' }}
+      <button class="primary" :disabled="submitting" @click="onSubmit">
+        {{ submitting ? '生成中…' : '生成图片' }}
       </button>
-      <button class="danger" :disabled="!busy" @click="onCancel">取消</button>
+      <button class="danger" :disabled="!task || !isTaskLive(task)" @click="onCancel">取消</button>
       <span v-if="task" class="tag">{{ task.status }}</span>
     </div>
     <p v-if="error" class="error">{{ error }}</p>
     <p v-if="task?.error && task.status === 'failed'" class="error">{{ task.error }}</p>
-    <p v-if="busy" class="muted">任务在服务端执行，可关闭本页后从「任务」回来查看。</p>
+    <p v-if="task && isTaskLive(task)" class="muted">
+      任务在服务端执行，可继续生成；进度见「任务」。
+    </p>
 
     <div v-if="task?.images?.length" class="grid" style="margin-top: 1rem">
       <div v-for="(img, i) in task.images" :key="img" class="thumb">

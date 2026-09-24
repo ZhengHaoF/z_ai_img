@@ -15,13 +15,15 @@ const files = ref<File[]>([]);
 /** 本地缩略图 objectURL；禁止在模板里调 URL.createObjectURL（会打崩渲染）。 */
 const previews = ref<string[]>([]);
 const uploaded = ref<string[]>([]);
-const busy = ref(false);
+/** 提交后短暂锁定按钮，不绑定任务跑完 */
+const submitting = ref(false);
 const uploading = ref(false);
 const error = ref('');
 const task = ref<Task | null>(null);
 const lightboxIndex = ref(-1);
 const lightboxImages = ref<string[]>([]);
 let timer: number | null = null;
+let unlockTimer: number | null = null;
 
 const isCompat = computed(() =>
   modelInfo.value?.protocol === 'compatible' ||
@@ -82,17 +84,29 @@ function openLightbox(images: string[], index: number) {
   lightboxIndex.value = index;
 }
 
+function armUnlock() {
+  if (unlockTimer != null) window.clearTimeout(unlockTimer);
+  unlockTimer = window.setTimeout(() => {
+    submitting.value = false;
+    unlockTimer = null;
+  }, 3000);
+}
+
+function isTaskLive(t: Task) {
+  return t.status === 'queued' || t.status === 'running';
+}
+
 async function poll(id: string) {
   const t = await fetchTask(id);
   task.value = t;
-  if (t.status === 'succeeded' || t.status === 'failed' || t.status === 'canceled') {
-    busy.value = false;
+  if (!isTaskLive(t)) {
     stopPoll();
   }
 }
 
 async function onSubmit() {
   error.value = '';
+  if (submitting.value || uploading.value) return;
   if (!prompt.value.trim()) {
     error.value = '请输入编辑描述';
     return;
@@ -105,7 +119,8 @@ async function onSubmit() {
     error.value = '请选择模型';
     return;
   }
-  busy.value = true;
+  submitting.value = true;
+  armUnlock();
   try {
     uploading.value = true;
     uploaded.value = await uploadFiles(files.value);
@@ -127,8 +142,12 @@ async function onSubmit() {
     }, 2500);
   } catch (e) {
     error.value = (e as Error).message;
-    busy.value = false;
+    submitting.value = false;
     uploading.value = false;
+    if (unlockTimer != null) {
+      window.clearTimeout(unlockTimer);
+      unlockTimer = null;
+    }
   }
 }
 
@@ -136,7 +155,6 @@ async function onCancel() {
   if (!task.value) return;
   try {
     task.value = await cancelTask(task.value.id);
-    busy.value = false;
     stopPoll();
   } catch (e) {
     error.value = (e as Error).message;
@@ -146,6 +164,7 @@ async function onCancel() {
 onBeforeUnmount(() => {
   stopPoll();
   revokeAll();
+  if (unlockTimer != null) window.clearTimeout(unlockTimer);
 });
 </script>
 
@@ -173,7 +192,7 @@ onBeforeUnmount(() => {
       <textarea v-model="prompt" rows="5" maxlength="32000" placeholder="描述你想要的编辑效果…"></textarea>
     </div>
     <div class="row">
-      <ModelSelect v-model="modelId" :disabled="busy || uploading" @change="onModelChange" />
+      <ModelSelect v-model="modelId" :disabled="submitting || uploading" @change="onModelChange" />
       <div class="field">
         <label>尺寸</label>
         <select v-model="size">
@@ -186,10 +205,10 @@ onBeforeUnmount(() => {
       </div>
     </div>
     <div class="row" style="align-items: center">
-      <button class="primary" :disabled="busy || uploading" @click="onSubmit">
-        {{ uploading ? '上传中…' : busy ? '编辑中…' : '编辑图片' }}
+      <button class="primary" :disabled="submitting || uploading" @click="onSubmit">
+        {{ uploading ? '上传中…' : submitting ? '提交中…' : '编辑图片' }}
       </button>
-      <button class="danger" :disabled="!busy" @click="onCancel">取消</button>
+      <button class="danger" :disabled="!task || !isTaskLive(task)" @click="onCancel">取消</button>
       <span v-if="task" class="tag">{{ task.status }}</span>
     </div>
     <p v-if="error" class="error">{{ error }}</p>
