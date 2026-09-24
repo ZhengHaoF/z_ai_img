@@ -1,0 +1,27 @@
+{
+  "activeProfileId": "qwen",
+  "profiles": [
+    {
+      "id": "jeniya",
+      "name": "Jeniya",
+      "baseUrl": "https://jeniya.cn",
+      "apiKeyEnv": "API_KEY_JENIYA",
+      "protocol": "openai",
+      "defaultModel": "",
+      "models": [],
+      "defaultSize": "1024x1024",
+      "defaultCount": 1
+    },
+    {
+      "id": "qwen",
+      "name": "千问兼容",
+      "baseUrl": "https://maas.qianwenaiapi.com/compatible-mode",
+      "apiKeyEnv": "API_KEY_QWEN",
+      "protocol": "compatible",
+      "defaultModel": "",
+      "models": [],
+      "defaultSize": "1024x1024",
+      "defaultCount": 1
+    }
+  ]
+}

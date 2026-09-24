@@ -1,0 +1,130 @@
+:root {
+  color-scheme: light dark;
+  --bg: #f4f2ef;
+  --panel: #fffcf8;
+  --ink: #1c1917;
+  --muted: #78716c;
+  --line: #e7e5e4;
+  --accent: #0f766e;
+  --accent-ink: #f0fdfa;
+  --danger: #b91c1c;
+  --ok: #15803d;
+  font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+
+:root.dark {
+  --bg: #0c0a09;
+  --panel: #1c1917;
+  --ink: #f5f5f4;
+  --muted: #a8a29e;
+  --line: #292524;
+  --accent: #2dd4bf;
+  --accent-ink: #042f2e;
+  --danger: #f87171;
+  --ok: #4ade80;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+}
+button, input, select, textarea {
+  font: inherit;
+  color: inherit;
+}
+button {
+  cursor: pointer;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  border-radius: 10px;
+  padding: 0.55rem 0.9rem;
+}
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+button.danger {
+  color: var(--danger);
+}
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 1rem 1.1rem;
+}
+.field { display: flex; flex-direction: column; gap: 0.35rem; margin-bottom: 0.85rem; }
+.field label { font-size: 0.9rem; color: var(--muted); }
+.field input, .field select, .field textarea {
+  border: 1px solid var(--line);
+  background: var(--bg);
+  border-radius: 10px;
+  padding: 0.55rem 0.7rem;
+}
+.row { display: flex; gap: 0.8rem; flex-wrap: wrap; }
+.row > * { min-width: 8rem; flex: 1; }
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 0.75rem;
+}
+@media (max-width: 640px) {
+  .row {
+    gap: 0.6rem;
+  }
+  .row > * {
+    min-width: 100%;
+    flex: 1 1 100%;
+  }
+  .row > .thumb-wrap {
+    min-width: 88px;
+    flex: 0 0 88px;
+  }
+  .grid {
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 0.55rem;
+  }
+  .card {
+    padding: 0.85rem 0.9rem;
+    border-radius: 12px;
+  }
+  button {
+    min-height: 42px;
+    padding: 0.6rem 0.85rem;
+  }
+  .field input,
+  .field select,
+  .field textarea {
+    min-height: 42px;
+    font-size: 16px; /* 避免 iOS 聚焦缩放 */
+  }
+  .field textarea {
+    min-height: auto;
+  }
+}
+.thumb {
+  aspect-ratio: 1;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: var(--bg);
+}
+.thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.muted { color: var(--muted); font-size: 0.9rem; }
+.error { color: var(--danger); }
+.ok { color: var(--ok); }
+.tag {
+  display: inline-block;
+  font-size: 0.75rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  color: var(--muted);
+}
