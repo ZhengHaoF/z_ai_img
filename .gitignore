@@ -1,12 +1,4 @@
-# --- Legacy Flutter ---
-legacy/build/
-legacy/.dart_tool/
-legacy/.flutter-plugins-dependencies
-legacy/android/app/debug
-legacy/android/app/profile
-legacy/android/app/release
-
-# --- Node / Web (to be added) ---
+# --- Node / Web ---
 node_modules/
 dist/
 web/dist/
