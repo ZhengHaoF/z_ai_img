@@ -228,7 +228,7 @@ onMounted(load);
     </div>
     <div class="field">
       <label>上游 Base URL</label>
-      <input v-model="form.baseUrl" placeholder="https://uuapi.net/v1" />
+      <input v-model="form.baseUrl" placeholder="https://uuapi.cc/v1" />
     </div>
     <div class="field">
       <label>上游模型名</label>

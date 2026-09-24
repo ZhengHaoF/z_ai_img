@@ -1,5 +1,6 @@
 import { config } from './config.js';
 import { logger } from './logBus.js';
+import { fetchLogged } from './fetchLog.js';
 
 const TASKS_PATH = '/tasks';
 
@@ -65,7 +66,7 @@ export async function submitDashScopeAsync({ target, params }) {
 
   logger.info(`POST ${url} (DashScope async)`, { model: target.upstreamModel });
   logger.debug('DashScope 请求体', body);
-  const res = await fetch(url, {
+  const res = await fetchLogged(url, {
     method: 'POST',
     headers: {
       ...authHeaders(target.apiKey),
@@ -105,7 +106,7 @@ export async function queryDashScopeAsync({ target, remoteTaskId }) {
   const root = dashScopeRoot(target.baseUrl);
   const url = joinUrl(root, `${TASKS_PATH}/${remoteTaskId}`);
   logger.debug(`GET ${url}`);
-  const res = await fetch(url, {
+  const res = await fetchLogged(url, {
     headers: authHeaders(target.apiKey),
     signal: AbortSignal.timeout(30000),
   });
@@ -161,7 +162,7 @@ function extractUrls(out) {
 }
 
 export async function downloadUrlToBuffer(url) {
-  const res = await fetch(url, {
+  const res = await fetchLogged(url, {
     signal: AbortSignal.timeout(config.upstreamTimeoutMs),
   });
   if (!res.ok) throw new Error(`下载结果图失败 HTTP ${res.status}`);

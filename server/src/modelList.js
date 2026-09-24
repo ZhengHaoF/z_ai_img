@@ -1,4 +1,5 @@
 import { getProfile } from './config.js';
+import { fetchLogged } from './fetchLog.js';
 
 /**
  * 从上游 GET /v1/models 拉取模型列表。
@@ -15,7 +16,7 @@ export async function fetchUpstreamModels(profileId) {
 
   const url = `${profile.baseUrl.replace(/\/+$/, '')}/v1/models`;
   try {
-    const res = await fetch(url, {
+    const res = await fetchLogged(url, {
       headers: { Authorization: `Bearer ${profile.apiKey}` },
       signal: AbortSignal.timeout(15000),
     });

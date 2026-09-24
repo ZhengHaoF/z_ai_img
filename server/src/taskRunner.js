@@ -16,6 +16,7 @@ import {
 } from './uuapiAsync.js';
 import { resolveModel } from './modelRegistry.js';
 import { logger } from './logBus.js';
+import { describeFetchError } from './fetchLog.js';
 
 const queue = [];
 const canceled = new Set();
@@ -116,6 +117,10 @@ async function run(task) {
       cancelDone(task.id);
       return;
     }
+    logger.error(`任务异常 ${task.id}`, {
+      error: e?.message || String(e),
+      detail: describeFetchError(e),
+    });
     fail(task.id, e.message || String(e));
   }
 }

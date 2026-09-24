@@ -41,6 +41,10 @@ function onModelChange(m: ModelItem | null) {
   if (m && n.value > maxN.value) n.value = maxN.value;
 }
 
+function clearPrompt() {
+  prompt.value = '';
+}
+
 function revokeAll() {
   for (const u of previews.value) URL.revokeObjectURL(u);
   previews.value = [];
@@ -162,7 +166,10 @@ onBeforeUnmount(() => {
       </div>
     </div>
     <div class="field">
-      <label>编辑描述</label>
+      <div class="field-head">
+        <label>编辑描述</label>
+        <button type="button" class="ghost" :disabled="!prompt" @click="clearPrompt">清空</button>
+      </div>
       <textarea v-model="prompt" rows="5" maxlength="32000" placeholder="描述你想要的编辑效果…"></textarea>
     </div>
     <div class="row">

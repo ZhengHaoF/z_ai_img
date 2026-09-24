@@ -62,6 +62,26 @@ button:disabled {
 }
 .field { display: flex; flex-direction: column; gap: 0.35rem; margin-bottom: 0.85rem; }
 .field label { font-size: 0.9rem; color: var(--muted); }
+.field-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.field-head label { margin: 0; }
+.ghost {
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--muted);
+  min-height: 28px;
+  padding: 0.15rem 0.55rem;
+  font-size: 0.8rem;
+  border-radius: 999px;
+}
+.ghost:hover:not(:disabled) {
+  color: var(--danger);
+  border-color: var(--danger);
+}
 .field input, .field select, .field textarea {
   border: 1px solid var(--line);
   background: var(--bg);

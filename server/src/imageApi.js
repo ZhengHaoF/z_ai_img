@@ -3,6 +3,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { config } from './config.js';
 import { logger } from './logBus.js';
+import { fetchLogged } from './fetchLog.js';
 
 function pickError(json) {
   return (
@@ -69,7 +70,7 @@ async function jsonGenerate(target, body, timeout) {
   const url = joinUrl(target.baseUrl, '/v1/images/generations');
   logger.info(`POST ${url}`, { model: body.model, n: body.n, size: body.size });
   logger.info('请求体', body);
-  const res = await fetch(url, {
+  const res = await fetchLogged(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -102,7 +103,7 @@ async function multipartEdit(target, params, timeout) {
   }
 
   logger.info(`POST ${url} (multipart edit)`, { model: target.upstreamModel });
-  const res = await fetch(url, {
+  const res = await fetchLogged(url, {
     method: 'POST',
     headers: { Authorization: `Bearer ${target.apiKey}` },
     body: form,
@@ -139,7 +140,7 @@ async function downloadResults(json) {
         buffer: Buffer.from(item.b64_json, 'base64'),
       });
     } else if (item.url) {
-      const res = await fetch(item.url, {
+      const res = await fetchLogged(item.url, {
         signal: AbortSignal.timeout(config.upstreamTimeoutMs),
       });
       if (!res.ok) throw new Error(`下载结果图失败 HTTP ${res.status}`);

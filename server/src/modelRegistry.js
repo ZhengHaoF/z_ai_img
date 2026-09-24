@@ -7,6 +7,7 @@ import {
   listModelRows,
   updateModel,
 } from './db.js';
+import { fetchLogged } from './fetchLog.js';
 
 /** 前端可见字段（不含 api_key）。 */
 function toPublic(row) {
@@ -111,7 +112,7 @@ export async function listRemoteModels({ baseUrl, apiKey }) {
   } else {
     url = `${b}/v1/models`;
   }
-  const res = await fetch(url, {
+  const res = await fetchLogged(url, {
     headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : {},
     signal: AbortSignal.timeout(15000),
   });

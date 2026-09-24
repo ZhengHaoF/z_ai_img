@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { config } from './config.js';
 import { logger } from './logBus.js';
+import { fetchLogged } from './fetchLog.js';
 
 function joinUrl(base, p) {
   const b = String(base).replace(/\/+$/, '');
@@ -94,7 +95,7 @@ export async function submitUuapiAsync({ target, taskType, params }) {
       response_format: 'url',
     };
     logger.info(`POST ${url}`, { model: body.model, n: body.n, size: body.size });
-    const res = await fetch(url, {
+    const res = await fetchLogged(url, {
       method: 'POST',
       headers: authHeaders(target.apiKey),
       body: JSON.stringify(body),
@@ -122,7 +123,7 @@ export async function submitUuapiAsync({ target, taskType, params }) {
     form.append('mask', await toBlob(params.mask), 'mask.png');
   }
   logger.info(`POST ${url} (multipart edit)`, { model: target.upstreamModel });
-  const res = await fetch(url, {
+  const res = await fetchLogged(url, {
     method: 'POST',
     headers: { Authorization: `Bearer ${target.apiKey}` },
     body: form,
@@ -142,7 +143,7 @@ export async function submitUuapiAsync({ target, taskType, params }) {
 export async function queryUuapiAsync({ target, remoteTaskId }) {
   const url = joinUrl(target.baseUrl, `/v1/images/tasks/${remoteTaskId}`);
   logger.debug(`GET ${url}`);
-  const res = await fetch(url, {
+  const res = await fetchLogged(url, {
     headers: authHeaders(target.apiKey),
     signal: AbortSignal.timeout(30000),
   });
@@ -182,7 +183,7 @@ export async function queryUuapiAsync({ target, remoteTaskId }) {
 }
 
 export async function downloadUrlToBuffer(url) {
-  const res = await fetch(url, {
+  const res = await fetchLogged(url, {
     signal: AbortSignal.timeout(config.upstreamTimeoutMs),
   });
   if (!res.ok) throw new Error(`下载结果图失败 HTTP ${res.status}`);

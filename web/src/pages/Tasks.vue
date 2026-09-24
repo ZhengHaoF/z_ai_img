@@ -8,10 +8,32 @@ const tasks = ref<Task[]>([]);
 const error = ref('');
 const lightboxImages = ref<string[]>([]);
 const lightboxIndex = ref(-1);
+const copiedId = ref('');
 
 function openLightbox(images: string[], index: number) {
   lightboxImages.value = images;
   lightboxIndex.value = index;
+}
+
+async function copyPrompt(t: Task) {
+  const text = t.params?.prompt || '';
+  if (!text) return;
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.left = '-9999px';
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+  }
+  copiedId.value = t.id;
+  window.setTimeout(() => {
+    if (copiedId.value === t.id) copiedId.value = '';
+  }, 1500);
 }
 
 async function load() {
@@ -40,6 +62,14 @@ onMounted(load);
         <div class="tags">
           <span class="tag">{{ t.type === 'generate' ? '文生图' : '图编辑' }}</span>
           <span class="tag">{{ t.status }}</span>
+          <button
+            type="button"
+            class="ghost"
+            :disabled="!t.params?.prompt"
+            @click="copyPrompt(t)"
+          >
+            {{ copiedId === t.id ? '已复制' : '复制提示词' }}
+          </button>
         </div>
       </div>
       <p class="muted" style="margin: 0.35rem 0">

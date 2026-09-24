@@ -113,12 +113,13 @@ onMounted(() => {
 
       <p v-if="loadError" class="error card">{{ loadError }}</p>
 
-      <GeneratePage v-if="tab === 'generate'" />
-      <EditPage v-else-if="tab === 'edit'" />
-      <TasksPage v-else-if="tab === 'tasks'" />
-      <GalleryPage v-else-if="tab === 'gallery'" />
-      <ModelsPage v-else-if="tab === 'models'" />
-      <LogsPage v-else />
+      <!-- generate/edit 用 v-show 保留提示词与进行中轮询 -->
+      <GeneratePage v-show="tab === 'generate'" />
+      <EditPage v-show="tab === 'edit'" />
+      <TasksPage v-if="tab === 'tasks'" />
+      <GalleryPage v-if="tab === 'gallery'" />
+      <ModelsPage v-if="tab === 'models'" />
+      <LogsPage v-if="tab === 'logs'" />
     </template>
   </div>
 </template>
