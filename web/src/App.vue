@@ -113,9 +113,13 @@ onMounted(() => {
 
       <p v-if="loadError" class="error card">{{ loadError }}</p>
 
-      <!-- generate/edit 用 v-show 保留提示词与进行中轮询 -->
-      <GeneratePage v-show="tab === 'generate'" />
-      <EditPage v-show="tab === 'edit'" />
+      <!-- 外层单根容器 + v-show：页面组件是多根，直接挂在组件上 v-show 无效 -->
+      <div v-show="tab === 'generate'" class="page-panel">
+        <GeneratePage />
+      </div>
+      <div v-show="tab === 'edit'" class="page-panel">
+        <EditPage />
+      </div>
       <TasksPage v-if="tab === 'tasks'" />
       <GalleryPage v-if="tab === 'gallery'" />
       <ModelsPage v-if="tab === 'models'" />
