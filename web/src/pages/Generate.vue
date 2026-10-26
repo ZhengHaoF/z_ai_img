@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { cancelTask, fetchTask, submitTask } from '../api/client';
+import { applyTask, tasks as allTasks } from '../api/taskEvents';
 import type { ModelItem, Task } from '../types';
 import Lightbox from '../components/Lightbox.vue';
 import ModelSelect from '../components/ModelSelect.vue';
@@ -15,9 +16,12 @@ const submitting = ref(false);
 /** 取消请求在途锁 */
 const canceling = ref(false);
 const error = ref('');
-const task = ref<Task | null>(null);
+/** 当前跟踪的任务 id；任务详情由全局 store 的 WS/降级推送驱动 */
+const watchedId = ref('');
+const task = computed<Task | null>(
+  () => allTasks.value.find((t) => t.id === watchedId.value) || null,
+);
 const lightboxIndex = ref(-1);
-let timer: number | null = null;
 
 const isCompat = computed(() =>
   modelInfo.value?.protocol === 'compatible' ||
@@ -43,26 +47,14 @@ function clearPrompt() {
   prompt.value = '';
 }
 
-function stopPoll() {
-  if (timer != null) {
-    window.clearInterval(timer);
-    timer = null;
-  }
-}
-
 function isTaskLive(t: Task) {
   return t.status === 'queued' || t.status === 'running';
 }
 
-async function poll(id: string) {
-  // 轮询静默，不触发顶部进度条
-  const t = await fetchTask(id, { silent: true });
-  task.value = t;
-  if (!isTaskLive(t)) {
-    stopPoll();
-    localStorage.removeItem('z_ai_last_task');
-  }
-}
+// 任务进入终态后清掉本地「上次任务」记忆
+watch(task, (t) => {
+  if (t && !isTaskLive(t)) localStorage.removeItem('z_ai_last_task');
+});
 
 async function onSubmit() {
   error.value = '';
@@ -85,14 +77,9 @@ async function onSubmit() {
       n: n.value,
     });
     localStorage.setItem('z_ai_last_task', res.id);
-    task.value = await fetchTask(res.id);
-    stopPoll();
-    timer = window.setInterval(() => {
-      poll(res.id).catch((e) => {
-        error.value = (e as Error).message;
-      });
-    }, 2500);
-    await poll(res.id);
+    watchedId.value = res.id;
+    // 立即拉一次让 UI 马上有反馈；后续状态由 WS/降级推送自动更新
+    applyTask(await fetchTask(res.id));
   } catch (e) {
     error.value = (e as Error).message;
   } finally {
@@ -105,8 +92,7 @@ async function onCancel() {
   if (!task.value || canceling.value) return;
   canceling.value = true;
   try {
-    task.value = await cancelTask(task.value.id);
-    stopPoll();
+    applyTask(await cancelTask(task.value.id));
   } catch (e) {
     error.value = (e as Error).message;
   } finally {
@@ -118,22 +104,12 @@ onMounted(async () => {
   const last = localStorage.getItem('z_ai_last_task');
   if (last) {
     try {
-      const t = await fetchTask(last);
-      task.value = t;
-      if (isTaskLive(t)) {
-        stopPoll();
-        timer = window.setInterval(() => {
-          poll(last).catch(() => {});
-        }, 2500);
-      }
+      applyTask(await fetchTask(last));
+      watchedId.value = last;
     } catch {
       localStorage.removeItem('z_ai_last_task');
     }
   }
-});
-
-onBeforeUnmount(() => {
-  stopPoll();
 });
 </script>
 

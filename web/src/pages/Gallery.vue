@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { Trash2, RefreshCw } from 'lucide-vue-next';
 import {
   deleteGalleryImage,
   fetchGallery,
   type GalleryImage,
 } from '../api/client';
+import { tasks as storeTasks } from '../api/taskEvents';
 import Lightbox from '../components/Lightbox.vue';
 
 const images = ref<GalleryImage[]>([]);
@@ -48,16 +49,39 @@ async function onConfirmYes() {
   }
 }
 
-async function load() {
-  loading.value = true;
+/**
+ * 实时刷新：任务出图 / 任务被删时静默重载图库。
+ * 签名 = 成功任务的 id+图片数，覆盖 WS 推送与降级轮询两条路径。
+ */
+const imgSignature = computed(() =>
+  storeTasks.value
+    .filter((t) => t.status === 'succeeded')
+    .map((t) => `${t.id}:${t.images.length}`)
+    .join('|'),
+);
+let reloadTimer: number | null = null;
+
+function scheduleReload() {
+  if (removing.value) return; // 删除中避免和本地乐观更新打架
+  if (reloadTimer != null) window.clearTimeout(reloadTimer);
+  reloadTimer = window.setTimeout(() => {
+    reloadTimer = null;
+    void load({ quiet: true });
+  }, 400);
+}
+
+watch(imgSignature, scheduleReload);
+
+async function load(opts?: { quiet?: boolean }) {
+  if (!opts?.quiet) loading.value = true;
   error.value = '';
   try {
     const data = await fetchGallery();
     images.value = data.images;
   } catch (e) {
-    error.value = (e as Error).message;
+    if (!opts?.quiet) error.value = (e as Error).message;
   } finally {
-    loading.value = false;
+    if (!opts?.quiet) loading.value = false;
   }
 }
 
@@ -76,6 +100,9 @@ function fmtTime(ts: number) {
 }
 
 onMounted(load);
+onBeforeUnmount(() => {
+  if (reloadTimer != null) window.clearTimeout(reloadTimer);
+});
 </script>
 
 <template>
@@ -83,7 +110,7 @@ onMounted(load);
     <div class="row" style="align-items: center; margin-bottom: 0.75rem">
       <h2 style="margin: 0; flex: 1">图库</h2>
       <span class="muted">{{ images.length }} 张</span>
-      <button :disabled="loading" @click="load">
+      <button :disabled="loading" @click="load()">
         <RefreshCw :size="14" style="vertical-align: -2px" />
         {{ loading ? '加载中…' : '刷新' }}
       </button>

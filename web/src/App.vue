@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, onBeforeUnmount, ref } from 'vue';
-import { AuthError, checkAuth, fetchTasks, login, logout } from './api/client';
+import { AuthError, checkAuth, login, logout } from './api/client';
+import { activeCount, startTaskEvents, stopTaskEvents } from './api/taskEvents';
 import GlobalLoading from './components/GlobalLoading.vue';
 import GeneratePage from './pages/Generate.vue';
 import EditPage from './pages/Edit.vue';
@@ -18,8 +19,6 @@ const password = ref('');
 const loginError = ref('');
 const loggingIn = ref(false);
 const loggingOut = ref(false);
-const activeCount = ref(0);
-let activeTimer: number | null = null;
 
 function applyTheme() {
   document.documentElement.classList.toggle('dark', dark.value);
@@ -31,46 +30,19 @@ function toggleTheme() {
   applyTheme();
 }
 
-function stopActivePoll() {
-  if (activeTimer != null) {
-    window.clearInterval(activeTimer);
-    activeTimer = null;
-  }
-  activeCount.value = 0;
-}
-
-async function refreshActiveCount() {
-  try {
-    // 后台轮询计数，静默请求不触发顶部进度条
-    const data = await fetchTasks({ silent: true });
-    activeCount.value = data.tasks.filter(
-      (t) => t.status === 'queued' || t.status === 'running',
-    ).length;
-  } catch {
-    /* 未登录或瞬时失败忽略 */
-  }
-}
-
-function startActivePoll() {
-  stopActivePoll();
-  void refreshActiveCount();
-  activeTimer = window.setInterval(() => {
-    void refreshActiveCount();
-  }, 4000);
-}
-
 async function boot() {
   checking.value = true;
   loadError.value = '';
   try {
     const me = await checkAuth();
     authed.value = me.authenticated;
-    if (authed.value) startActivePoll();
-    else stopActivePoll();
+    // 登录后连 WS：任务状态/活跃数实时推送，断线自动降级轮询
+    if (authed.value) startTaskEvents();
+    else stopTaskEvents();
   } catch (e) {
     if (e instanceof AuthError) authed.value = false;
     else loadError.value = (e as Error).message;
-    stopActivePoll();
+    stopTaskEvents();
   } finally {
     checking.value = false;
   }
@@ -100,7 +72,7 @@ async function onLogout() {
   } finally {
     authed.value = false;
     password.value = '';
-    stopActivePoll();
+    stopTaskEvents();
     loggingOut.value = false;
   }
 }
@@ -110,7 +82,7 @@ onMounted(() => {
   boot();
 });
 
-onBeforeUnmount(stopActivePoll);
+onBeforeUnmount(stopTaskEvents);
 </script>
 
 <template>

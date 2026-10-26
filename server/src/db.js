@@ -1,5 +1,6 @@
 import { DatabaseSync } from 'node:sqlite';
 import { config, ensureDirs } from './config.js';
+import { emitTask, emitTaskRemoved } from './taskBus.js';
 
 let db;
 
@@ -84,6 +85,7 @@ export function insertTask(task) {
       task.finishedAt ?? null,
       task.remoteTaskId ?? null,
     );
+  emitTask(rowToTask(getTaskRow(task.id)));
 }
 
 export function listUnfinishedTaskRows() {
@@ -103,6 +105,9 @@ export function updateTask(id, fields) {
   getDb()
     .prepare(`UPDATE tasks SET ${sets} WHERE id = ?`)
     .run(...values, id);
+  // 通知 WS 订阅方（含 results 图列表，便于前端实时更新）
+  const row = getTaskRow(id);
+  if (row) emitTask(rowToTask(row));
 }
 
 export function getTaskRow(id) {
@@ -165,6 +170,7 @@ export function deleteResultsByTask(taskId) {
 
 export function deleteTask(id) {
   getDb().prepare('DELETE FROM tasks WHERE id = ?').run(id);
+  emitTaskRemoved(id);
 }
 
 export function getTaskRowById(id) {

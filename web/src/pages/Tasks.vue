@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
-import { deleteTask, fetchTasks } from '../api/client';
+import { deleteTask } from '../api/client';
+import { refreshTasks, tasks as storeTasks } from '../api/taskEvents';
 import type { Task } from '../types';
 import Lightbox from '../components/Lightbox.vue';
 
-const tasks = ref<Task[]>([]);
+/** 列表由全局 store 驱动（WS 实时推送 + 断线降级轮询），「刷新」手动全量同步 */
+const tasks = storeTasks;
 const error = ref('');
 const loading = ref(false);
 const lightboxImages = ref<string[]>([]);
@@ -91,8 +93,7 @@ async function load() {
   loading.value = true;
   error.value = '';
   try {
-    const data = await fetchTasks();
-    tasks.value = data.tasks;
+    await refreshTasks();
   } catch (e) {
     error.value = (e as Error).message;
   } finally {
