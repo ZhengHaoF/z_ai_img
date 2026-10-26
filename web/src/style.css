@@ -50,6 +50,12 @@ button.primary {
 button.danger {
   color: var(--danger);
 }
+/* 危险主操作（如删除确认）：红底白字，覆盖 primary 的青绿底 */
+button.danger.primary {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+}
 button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
