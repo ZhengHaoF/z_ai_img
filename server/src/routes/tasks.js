@@ -2,6 +2,7 @@ import { Router } from 'express';
 import crypto from 'node:crypto';
 import { getTaskRow, insertTask, listTaskRows, rowToTask } from '../db.js';
 import { markCancel, enqueue } from '../taskRunner.js';
+import { deleteTaskWithImages } from '../taskDelete.js';
 import { resolveModel } from '../modelRegistry.js';
 
 const router = Router();
@@ -79,6 +80,15 @@ router.post('/:id/cancel', (req, res) => {
   markCancel(task.id);
   const updated = rowToTask(getTaskRow(task.id));
   res.json(updated);
+});
+
+/** 删除任务及其结果图；未终态（queued/running）拒绝，需先取消。 */
+router.delete('/:id', (req, res) => {
+  const result = deleteTaskWithImages(req.params.id);
+  if (result.error) {
+    return res.status(result.httpStatus).json({ error: result.error });
+  }
+  res.json({ ok: true, deletedImages: result.deletedImages });
 });
 
 export default router;

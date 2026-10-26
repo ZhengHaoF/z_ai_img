@@ -126,6 +126,13 @@ export function cancelTask(id: string) {
   return jsonFetch<Task>(`/api/tasks/${id}/cancel`, { method: 'POST' });
 }
 
+/** 删除任务及其结果图；进行中任务服务端会拒绝（需先取消）。 */
+export function deleteTask(id: string) {
+  return jsonFetch<{ ok: boolean; deletedImages: number }>(`/api/tasks/${id}`, {
+    method: 'DELETE',
+  });
+}
+
 export function fetchTasks(opts?: RequestOptions) {
   return jsonFetch<{ tasks: Task[] }>('/api/tasks', opts);
 }

@@ -4,13 +4,10 @@ import path from 'node:path';
 import { config } from '../config.js';
 import {
   deleteResultByFile,
-  deleteResultsByTask,
-  deleteTask,
   findResultByFile,
-  getTaskRow,
   listAllImages,
-  listResults,
 } from '../db.js';
+import { deleteTaskWithImages } from '../taskDelete.js';
 import { logger } from '../logBus.js';
 
 const router = Router();
@@ -49,24 +46,13 @@ router.delete('/:fileName', (req, res) => {
   }
 });
 
-/** 删除整个任务及其图片。 */
+/** 删除整个任务及其图片（未终态任务拒绝，需先取消）。 */
 router.delete('/task/:taskId', (req, res) => {
-  const taskId = req.params.taskId;
-  const task = getTaskRow(taskId);
-  if (!task) return res.status(404).json({ error: '任务不存在' });
-  try {
-    const names = listResults(taskId);
-    for (const name of names) {
-      const p = path.join(config.imagesDir, path.basename(name));
-      if (p.startsWith(config.imagesDir) && fs.existsSync(p)) fs.unlinkSync(p);
-    }
-    deleteResultsByTask(taskId);
-    deleteTask(taskId);
-    logger.info(`删除任务 ${taskId}（含 ${names.length} 张图）`);
-    res.json({ ok: true, deletedImages: names.length });
-  } catch (e) {
-    res.status(500).json({ error: e.message || String(e) });
+  const result = deleteTaskWithImages(req.params.taskId);
+  if (result.error) {
+    return res.status(result.httpStatus).json({ error: result.error });
   }
+  res.json({ ok: true, deletedImages: result.deletedImages });
 });
 
 export default router;

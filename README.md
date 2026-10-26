@@ -138,6 +138,7 @@ cd web && npm run dev        # Vite，端口 5173，自动代理 /api 与 /ws �
 | `/api/tasks` | POST | 提交生成/编辑任务 |
 | `/api/tasks/:id` | GET | 查询状态与结果 |
 | `/api/tasks/:id/cancel` | POST | 取消 |
+| `/api/tasks/:id` | DELETE | 删除任务及其结果图（进行中任务需先取消） |
 | `/api/tasks` | GET | 最近任务列表 |
 | `/api/gallery` | GET | 历史结果 |
 | `/api/models` | CRUD | 模型管理 |

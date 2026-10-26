@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
-import { fetchTasks } from '../api/client';
+import { computed, onMounted, ref } from 'vue';
+import { deleteTask, fetchTasks } from '../api/client';
 import type { Task } from '../types';
 import Lightbox from '../components/Lightbox.vue';
 
@@ -10,6 +10,55 @@ const loading = ref(false);
 const lightboxImages = ref<string[]>([]);
 const lightboxIndex = ref(-1);
 const copiedId = ref('');
+
+/** 删除确认弹窗 */
+const confirmVisible = ref(false);
+const confirmTask = ref<Task | null>(null);
+const removing = ref(false);
+const confirmError = ref('');
+
+const confirmMessage = computed(() => {
+  const t = confirmTask.value;
+  if (!t) return '';
+  const prompt = t.params?.prompt ? t.params.prompt.slice(0, 40) : '';
+  const n = t.images?.length || 0;
+  return `确定删除该任务吗？\n${prompt}\n任务下 ${n} 张结果图将一并删除，不可恢复。`;
+});
+
+function isTaskLive(t: Task) {
+  return t.status === 'queued' || t.status === 'running';
+}
+
+function askDelete(t: Task) {
+  if (isTaskLive(t)) return;
+  confirmTask.value = t;
+  confirmError.value = '';
+  confirmVisible.value = true;
+}
+
+function closeConfirm() {
+  if (removing.value) return;
+  confirmVisible.value = false;
+  confirmTask.value = null;
+}
+
+async function onConfirmDelete() {
+  const t = confirmTask.value;
+  if (!t || removing.value) return;
+  removing.value = true;
+  confirmError.value = '';
+  try {
+    await deleteTask(t.id);
+    confirmVisible.value = false;
+    confirmTask.value = null;
+    tasks.value = tasks.value.filter((x) => x.id !== t.id);
+  } catch (e) {
+    // 失败保留弹窗展示原因（例如任务进行中需先取消）
+    confirmError.value = (e as Error).message;
+  } finally {
+    removing.value = false;
+  }
+}
 
 function openLightbox(images: string[], index: number) {
   lightboxImages.value = images;
@@ -77,6 +126,15 @@ onMounted(load);
           >
             {{ copiedId === t.id ? '已复制' : '复制提示词' }}
           </button>
+          <button
+            type="button"
+            class="ghost"
+            :disabled="isTaskLive(t)"
+            :title="isTaskLive(t) ? '任务进行中，请先取消后再删除' : '删除任务及其结果图'"
+            @click="askDelete(t)"
+          >
+            删除
+          </button>
         </div>
       </div>
       <p class="muted" style="margin: 0.35rem 0">
@@ -107,6 +165,20 @@ onMounted(load);
     @close="lightboxIndex = -1"
     @update:index="lightboxIndex = $event"
   />
+
+  <div v-if="confirmVisible" class="overlay" @click.self="closeConfirm">
+    <div class="dialog">
+      <h3 style="margin-top: 0">删除任务</h3>
+      <p class="muted" style="white-space: pre-line">{{ confirmMessage }}</p>
+      <p v-if="confirmError" class="error">{{ confirmError }}</p>
+      <div class="row">
+        <button class="danger primary" :disabled="removing" @click="onConfirmDelete">
+          {{ removing ? '删除中…' : '删除' }}
+        </button>
+        <button :disabled="removing" @click="closeConfirm">取消</button>
+      </div>
+    </div>
+  </div>
 </template>
 
 <style scoped>
@@ -140,5 +212,21 @@ onMounted(load);
   display: flex;
   gap: 0.35rem;
   flex-shrink: 0;
+}
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.dialog {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 1.25rem 1.4rem;
+  width: min(360px, 92vw);
 }
 </style>
