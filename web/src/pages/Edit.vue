@@ -15,15 +15,17 @@ const files = ref<File[]>([]);
 /** 本地缩略图 objectURL；禁止在模板里调 URL.createObjectURL（会打崩渲染）。 */
 const previews = ref<string[]>([]);
 const uploaded = ref<string[]>([]);
-/** 提交后短暂锁定按钮，不绑定任务跑完 */
+/** 提交请求在途锁；任务在服务端跑，不锁到任务完成 */
 const submitting = ref(false);
+/** 上传请求在途锁 */
 const uploading = ref(false);
+/** 取消请求在途锁 */
+const canceling = ref(false);
 const error = ref('');
 const task = ref<Task | null>(null);
 const lightboxIndex = ref(-1);
 const lightboxImages = ref<string[]>([]);
 let timer: number | null = null;
-let unlockTimer: number | null = null;
 
 const isCompat = computed(() =>
   modelInfo.value?.protocol === 'compatible' ||
@@ -84,20 +86,13 @@ function openLightbox(images: string[], index: number) {
   lightboxIndex.value = index;
 }
 
-function armUnlock() {
-  if (unlockTimer != null) window.clearTimeout(unlockTimer);
-  unlockTimer = window.setTimeout(() => {
-    submitting.value = false;
-    unlockTimer = null;
-  }, 3000);
-}
-
 function isTaskLive(t: Task) {
   return t.status === 'queued' || t.status === 'running';
 }
 
 async function poll(id: string) {
-  const t = await fetchTask(id);
+  // 轮询静默，不触发顶部进度条
+  const t = await fetchTask(id, { silent: true });
   task.value = t;
   if (!isTaskLive(t)) {
     stopPoll();
@@ -120,7 +115,6 @@ async function onSubmit() {
     return;
   }
   submitting.value = true;
-  armUnlock();
   try {
     uploading.value = true;
     uploaded.value = await uploadFiles(files.value);
@@ -142,29 +136,29 @@ async function onSubmit() {
     }, 2500);
   } catch (e) {
     error.value = (e as Error).message;
+  } finally {
+    // 只锁「上传/提交在途」；任务在服务端继续跑
     submitting.value = false;
     uploading.value = false;
-    if (unlockTimer != null) {
-      window.clearTimeout(unlockTimer);
-      unlockTimer = null;
-    }
   }
 }
 
 async function onCancel() {
-  if (!task.value) return;
+  if (!task.value || canceling.value) return;
+  canceling.value = true;
   try {
     task.value = await cancelTask(task.value.id);
     stopPoll();
   } catch (e) {
     error.value = (e as Error).message;
+  } finally {
+    canceling.value = false;
   }
 }
 
 onBeforeUnmount(() => {
   stopPoll();
   revokeAll();
-  if (unlockTimer != null) window.clearTimeout(unlockTimer);
 });
 </script>
 
@@ -208,7 +202,9 @@ onBeforeUnmount(() => {
       <button class="primary" :disabled="submitting || uploading" @click="onSubmit">
         {{ uploading ? '上传中…' : submitting ? '提交中…' : '编辑图片' }}
       </button>
-      <button class="danger" :disabled="!task || !isTaskLive(task)" @click="onCancel">取消</button>
+      <button class="danger" :disabled="!task || !isTaskLive(task) || canceling" @click="onCancel">
+        {{ canceling ? '取消中…' : '取消' }}
+      </button>
       <span v-if="task" class="tag">{{ task.status }}</span>
     </div>
     <p v-if="error" class="error">{{ error }}</p>

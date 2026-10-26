@@ -1,4 +1,5 @@
-import type { ModelItem, SubmitPayload, Task } from '../types';
+import type { ModelItem, Protocol, SubmitPayload, Task } from '../types';
+import { beginRequest, endRequest, type RequestOptions } from './loading';
 
 export class AuthError extends Error {
   constructor() {
@@ -6,14 +7,24 @@ export class AuthError extends Error {
   }
 }
 
-async function jsonFetch<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(url, { credentials: 'same-origin', ...init });
-  if (res.status === 401) throw new AuthError();
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    throw new Error((data as { error?: string }).error || `HTTP ${res.status}`);
+async function jsonFetch<T>(
+  url: string,
+  init?: RequestInit & RequestOptions,
+): Promise<T> {
+  const { silent, ...rest } = init ?? {};
+  const quiet = silent === true;
+  if (!quiet) beginRequest();
+  try {
+    const res = await fetch(url, { credentials: 'same-origin', ...rest });
+    if (res.status === 401) throw new AuthError();
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error((data as { error?: string }).error || `HTTP ${res.status}`);
+    }
+    return data as T;
+  } finally {
+    if (!quiet) endRequest();
   }
-  return data as T;
 }
 
 export function checkAuth() {
@@ -32,9 +43,9 @@ export function logout() {
   return jsonFetch<{ ok: boolean }>('/api/logout', { method: 'POST' });
 }
 
-export function fetchModels(enabledOnly = true) {
+export function fetchModels(enabledOnly = true, opts?: RequestOptions) {
   const q = enabledOnly ? '?enabled=1' : '';
-  return jsonFetch<{ models: ModelItem[] }>(`/api/models${q}`);
+  return jsonFetch<{ models: ModelItem[] }>(`/api/models${q}`, opts);
 }
 
 export function createModel(body: {
@@ -85,7 +96,7 @@ export function listRemoteModels(body: { baseUrl: string; apiKey?: string }) {
 export function syncModels(body: {
   baseUrl: string;
   apiKey?: string;
-  protocol: 'openai' | 'compatible';
+  protocol: Protocol;
   enabled?: boolean;
 }) {
   return jsonFetch<{
@@ -107,16 +118,16 @@ export function submitTask(payload: SubmitPayload) {
   });
 }
 
-export function fetchTask(id: string) {
-  return jsonFetch<Task>(`/api/tasks/${id}`);
+export function fetchTask(id: string, opts?: RequestOptions) {
+  return jsonFetch<Task>(`/api/tasks/${id}`, opts);
 }
 
 export function cancelTask(id: string) {
   return jsonFetch<Task>(`/api/tasks/${id}/cancel`, { method: 'POST' });
 }
 
-export function fetchTasks() {
-  return jsonFetch<{ tasks: Task[] }>('/api/tasks');
+export function fetchTasks(opts?: RequestOptions) {
+  return jsonFetch<{ tasks: Task[] }>('/api/tasks', opts);
 }
 
 export interface GalleryImage {

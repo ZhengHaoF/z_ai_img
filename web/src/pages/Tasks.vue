@@ -6,6 +6,7 @@ import Lightbox from '../components/Lightbox.vue';
 
 const tasks = ref<Task[]>([]);
 const error = ref('');
+const loading = ref(false);
 const lightboxImages = ref<string[]>([]);
 const lightboxIndex = ref(-1);
 const copiedId = ref('');
@@ -37,11 +38,16 @@ async function copyPrompt(t: Task) {
 }
 
 async function load() {
+  if (loading.value) return;
+  loading.value = true;
+  error.value = '';
   try {
     const data = await fetchTasks();
     tasks.value = data.tasks;
   } catch (e) {
     error.value = (e as Error).message;
+  } finally {
+    loading.value = false;
   }
 }
 
@@ -52,10 +58,11 @@ onMounted(load);
   <div class="card">
     <div class="toolbar">
       <h2>最近任务</h2>
-      <button @click="load">刷新</button>
+      <button :disabled="loading" @click="load">{{ loading ? '加载中…' : '刷新' }}</button>
     </div>
     <p v-if="error" class="error">{{ error }}</p>
-    <p v-if="!tasks.length" class="muted">暂无任务</p>
+    <p v-if="loading && !tasks.length" class="muted">加载中…</p>
+    <p v-if="!tasks.length && !loading" class="muted">暂无任务</p>
     <div v-for="t in tasks" :key="t.id" class="task">
       <div class="task-head">
         <strong>{{ t.params.prompt.slice(0, 40) }}</strong>

@@ -26,7 +26,8 @@ async function load() {
   loading.value = true;
   loadError.value = '';
   try {
-    const data = await fetchModels(true);
+    // 下拉自带「加载中…」占位，静默请求不触发顶部进度条
+    const data = await fetchModels(true, { silent: true });
     models.value = data.models;
     if (!data.models.length) {
       loadError.value = '暂无启用模型，请到「模型管理」添加或同步';

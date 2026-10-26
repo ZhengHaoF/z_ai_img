@@ -10,13 +10,14 @@ const modelId = ref('');
 const modelInfo = ref<ModelItem | null>(null);
 const size = ref('1024x1024');
 const n = ref(1);
-/** 提交后短暂锁定按钮，不绑定任务跑完 */
+/** 提交请求在途锁；任务在服务端跑，不锁到任务完成 */
 const submitting = ref(false);
+/** 取消请求在途锁 */
+const canceling = ref(false);
 const error = ref('');
 const task = ref<Task | null>(null);
 const lightboxIndex = ref(-1);
 let timer: number | null = null;
-let unlockTimer: number | null = null;
 
 const isCompat = computed(() =>
   modelInfo.value?.protocol === 'compatible' ||
@@ -49,20 +50,13 @@ function stopPoll() {
   }
 }
 
-function armUnlock() {
-  if (unlockTimer != null) window.clearTimeout(unlockTimer);
-  unlockTimer = window.setTimeout(() => {
-    submitting.value = false;
-    unlockTimer = null;
-  }, 3000);
-}
-
 function isTaskLive(t: Task) {
   return t.status === 'queued' || t.status === 'running';
 }
 
 async function poll(id: string) {
-  const t = await fetchTask(id);
+  // 轮询静默，不触发顶部进度条
+  const t = await fetchTask(id, { silent: true });
   task.value = t;
   if (!isTaskLive(t)) {
     stopPoll();
@@ -82,7 +76,6 @@ async function onSubmit() {
     return;
   }
   submitting.value = true;
-  armUnlock();
   try {
     const res = await submitTask({
       type: 'generate',
@@ -102,21 +95,22 @@ async function onSubmit() {
     await poll(res.id);
   } catch (e) {
     error.value = (e as Error).message;
+  } finally {
+    // 只锁「提交在途」；任务在服务端继续跑
     submitting.value = false;
-    if (unlockTimer != null) {
-      window.clearTimeout(unlockTimer);
-      unlockTimer = null;
-    }
   }
 }
 
 async function onCancel() {
-  if (!task.value) return;
+  if (!task.value || canceling.value) return;
+  canceling.value = true;
   try {
     task.value = await cancelTask(task.value.id);
     stopPoll();
   } catch (e) {
     error.value = (e as Error).message;
+  } finally {
+    canceling.value = false;
   }
 }
 
@@ -140,7 +134,6 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   stopPoll();
-  if (unlockTimer != null) window.clearTimeout(unlockTimer);
 });
 </script>
 
@@ -169,9 +162,11 @@ onBeforeUnmount(() => {
     </div>
     <div class="row" style="align-items: center">
       <button class="primary" :disabled="submitting" @click="onSubmit">
-        {{ submitting ? '生成中…' : '生成图片' }}
+        {{ submitting ? '提交中…' : '生成图片' }}
       </button>
-      <button class="danger" :disabled="!task || !isTaskLive(task)" @click="onCancel">取消</button>
+      <button class="danger" :disabled="!task || !isTaskLive(task) || canceling" @click="onCancel">
+        {{ canceling ? '取消中…' : '取消' }}
+      </button>
       <span v-if="task" class="tag">{{ task.status }}</span>
     </div>
     <p v-if="error" class="error">{{ error }}</p>

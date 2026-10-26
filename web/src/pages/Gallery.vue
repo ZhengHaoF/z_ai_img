@@ -17,6 +17,7 @@ const lightboxIndex = ref(-1);
 const confirmVisible = ref(false);
 const confirmTitle = ref('');
 const confirmMessage = ref('');
+const removing = ref(false);
 let confirmAction: (() => Promise<void>) | null = null;
 
 function askConfirm(title: string, message: string, action: () => Promise<void>) {
@@ -26,16 +27,24 @@ function askConfirm(title: string, message: string, action: () => Promise<void>)
   confirmVisible.value = true;
 }
 
+function onOverlayClick() {
+  if (!removing.value) confirmVisible.value = false;
+}
+
 async function onConfirmYes() {
   const fn = confirmAction;
-  confirmVisible.value = false;
-  confirmAction = null;
-  if (!fn) return;
+  if (!fn || removing.value) return;
+  removing.value = true;
   try {
     await fn();
+    confirmVisible.value = false;
+    confirmAction = null;
     await load();
   } catch (e) {
+    // 失败保留弹窗，用户可重试或取消
     error.value = (e as Error).message;
+  } finally {
+    removing.value = false;
   }
 }
 
@@ -104,13 +113,15 @@ onMounted(load);
     @update:index="lightboxIndex = $event"
   />
 
-  <div v-if="confirmVisible" class="overlay" @click.self="confirmVisible = false">
+  <div v-if="confirmVisible" class="overlay" @click.self="onOverlayClick">
     <div class="dialog">
       <h3 style="margin-top: 0">{{ confirmTitle }}</h3>
       <p class="muted" style="white-space: pre-line">{{ confirmMessage }}</p>
       <div class="row">
-        <button class="danger primary" @click="onConfirmYes">删除</button>
-        <button @click="confirmVisible = false">取消</button>
+        <button class="danger primary" :disabled="removing" @click="onConfirmYes">
+          {{ removing ? '删除中…' : '删除' }}
+        </button>
+        <button :disabled="removing" @click="confirmVisible = false">取消</button>
       </div>
     </div>
   </div>

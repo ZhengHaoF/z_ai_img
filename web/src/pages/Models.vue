@@ -14,8 +14,12 @@ import type { ModelItem } from '../types';
 const models = ref<ModelItem[]>([]);
 const error = ref('');
 const notice = ref('');
+const listLoading = ref(false);
+const saving = ref(false);
 const syncing = ref(false);
 const listing = ref(false);
+/** 正在执行启用/停用/删除的模型 id，行级防连点 */
+const rowBusy = ref<string | null>(null);
 const remoteNames = ref<string[]>([]);
 
 const showForm = ref(false);
@@ -36,13 +40,17 @@ function protocolLabel(p: string) {
   return 'OpenAI Images';
 }
 
-async function load() {
+async function load(opts?: { quiet?: boolean }) {
+  const quiet = opts?.quiet === true;
+  if (!quiet) listLoading.value = true;
   error.value = '';
   try {
     const m = await fetchModels(false);
     models.value = m.models;
   } catch (e) {
     error.value = (e as Error).message;
+  } finally {
+    if (!quiet) listLoading.value = false;
   }
 }
 
@@ -75,7 +83,9 @@ function openEdit(m: ModelItem) {
 }
 
 async function onSave() {
+  if (saving.value) return;
   error.value = '';
+  saving.value = true;
   try {
     if (editingId.value) {
       const body: Parameters<typeof updateModel>[1] = {
@@ -91,28 +101,38 @@ async function onSave() {
       await createModel({ ...form.value });
     }
     showForm.value = false;
-    await load();
+    await load({ quiet: true });
   } catch (e) {
     error.value = (e as Error).message;
+  } finally {
+    saving.value = false;
   }
 }
 
 async function onToggle(m: ModelItem) {
+  if (rowBusy.value) return;
+  rowBusy.value = m.id;
   try {
     await updateModel(m.id, { enabled: !m.enabled });
-    await load();
+    await load({ quiet: true });
   } catch (e) {
     error.value = (e as Error).message;
+  } finally {
+    rowBusy.value = null;
   }
 }
 
 async function onDelete(m: ModelItem) {
+  if (rowBusy.value) return;
   if (!confirm(`删除模型「${m.label}」？`)) return;
+  rowBusy.value = m.id;
   try {
     await deleteModel(m.id);
-    await load();
+    await load({ quiet: true });
   } catch (e) {
     error.value = (e as Error).message;
+  } finally {
+    rowBusy.value = null;
   }
 }
 
@@ -194,12 +214,26 @@ onMounted(load);
             <span class="tag" :class="m.enabled ? 'ok' : 'off'">{{ m.enabled ? '启用' : '停用' }}</span>
           </div>
           <div class="model-actions">
-            <button class="icon-like" :title="m.enabled ? '停用' : '启用'" @click="onToggle(m)">
+            <button
+              class="icon-like"
+              :title="m.enabled ? '停用' : '启用'"
+              :disabled="listLoading || !!rowBusy"
+              @click="onToggle(m)"
+            >
               <Check v-if="m.enabled" :size="16" />
               <X v-else :size="16" />
             </button>
-            <button class="icon-like" title="编辑" @click="openEdit(m)"><Pencil :size="14" /></button>
-            <button class="icon-like danger" title="删除" @click="onDelete(m)"><Trash2 :size="14" /></button>
+            <button class="icon-like" title="编辑" :disabled="!!rowBusy" @click="openEdit(m)">
+              <Pencil :size="14" />
+            </button>
+            <button
+              class="icon-like danger"
+              title="删除"
+              :disabled="listLoading || !!rowBusy"
+              @click="onDelete(m)"
+            >
+              <Trash2 :size="14" />
+            </button>
           </div>
         </div>
         <div class="model-meta">
@@ -207,7 +241,8 @@ onMounted(load);
           <div class="url"><span class="k">Base URL</span>{{ m.baseUrl }}</div>
         </div>
       </div>
-      <p v-if="!models.length" class="muted">暂无模型，点「添加」</p>
+      <p v-if="listLoading && !models.length" class="muted">加载中…</p>
+      <p v-if="!models.length && !listLoading" class="muted">暂无模型，点「添加」</p>
     </div>
   </div>
 
@@ -263,8 +298,10 @@ onMounted(load);
     </div>
 
     <div class="actions">
-      <button class="primary" @click="onSave">保存</button>
-      <button @click="showForm = false">取消</button>
+      <button class="primary" :disabled="saving || listing || syncing" @click="onSave">
+        {{ saving ? '保存中…' : '保存' }}
+      </button>
+      <button :disabled="saving" @click="showForm = false">取消</button>
     </div>
   </div>
 </template>

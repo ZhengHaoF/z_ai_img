@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, onBeforeUnmount, ref } from 'vue';
 import { AuthError, checkAuth, fetchTasks, login, logout } from './api/client';
+import GlobalLoading from './components/GlobalLoading.vue';
 import GeneratePage from './pages/Generate.vue';
 import EditPage from './pages/Edit.vue';
 import TasksPage from './pages/Tasks.vue';
@@ -16,6 +17,7 @@ const checking = ref(true);
 const password = ref('');
 const loginError = ref('');
 const loggingIn = ref(false);
+const loggingOut = ref(false);
 const activeCount = ref(0);
 let activeTimer: number | null = null;
 
@@ -39,7 +41,8 @@ function stopActivePoll() {
 
 async function refreshActiveCount() {
   try {
-    const data = await fetchTasks();
+    // 后台轮询计数，静默请求不触发顶部进度条
+    const data = await fetchTasks({ silent: true });
     activeCount.value = data.tasks.filter(
       (t) => t.status === 'queued' || t.status === 'running',
     ).length;
@@ -88,12 +91,17 @@ async function onLogin() {
 }
 
 async function onLogout() {
+  if (loggingOut.value) return;
+  loggingOut.value = true;
   try {
     await logout();
+  } catch {
+    /* 登出接口失败也照常清理本地登录态 */
   } finally {
     authed.value = false;
     password.value = '';
     stopActivePoll();
+    loggingOut.value = false;
   }
 }
 
@@ -107,33 +115,40 @@ onBeforeUnmount(stopActivePoll);
 
 <template>
   <div class="shell">
+    <GlobalLoading />
     <header class="top">
       <div>
         <strong>Z Ai</strong>
         <span class="muted"> · 任务在服务端跑，关页可继续</span>
       </div>
-      <div class="row" style="flex: 0">
+      <div class="top-actions">
         <template v-if="authed">
           <button @click="toggleTheme">{{ dark ? '浅色' : '深色' }}</button>
-          <button @click="onLogout">退出</button>
+          <button :disabled="loggingOut" @click="onLogout">
+            {{ loggingOut ? '退出中…' : '退出' }}
+          </button>
         </template>
         <button v-else @click="toggleTheme">{{ dark ? '浅色' : '深色' }}</button>
       </div>
     </header>
 
-    <div v-if="checking" class="card muted">检查登录状态…</div>
+    <div v-if="checking" class="auth-stage">
+      <div class="card muted login-card">检查登录状态…</div>
+    </div>
 
-    <div v-else-if="!authed" class="card login">
-      <h2 style="margin-top: 0">登录</h2>
-      <p class="muted">个人站，输入访问密码后使用生图 / 编辑。</p>
-      <form class="field" @submit.prevent="onLogin">
-        <label>密码</label>
-        <input v-model="password" type="password" autocomplete="current-password" placeholder="访问密码" />
-        <button class="primary" type="submit" :disabled="loggingIn || !password">
-          {{ loggingIn ? '登录中…' : '进入' }}
-        </button>
-      </form>
-      <p v-if="loginError" class="error">{{ loginError }}</p>
+    <div v-else-if="!authed" class="auth-stage">
+      <div class="card login-card">
+        <h2 class="login-title">登录</h2>
+        <p class="muted login-desc">个人站，输入访问密码后使用生图 / 编辑。</p>
+        <form class="field" @submit.prevent="onLogin">
+          <label>密码</label>
+          <input v-model="password" type="password" autocomplete="current-password" placeholder="访问密码" />
+          <button class="primary" type="submit" :disabled="loggingIn || !password">
+            {{ loggingIn ? '登录中…' : '进入' }}
+          </button>
+        </form>
+        <p v-if="loginError" class="error">{{ loginError }}</p>
+      </div>
     </div>
 
     <template v-else>
@@ -169,8 +184,30 @@ onBeforeUnmount(stopActivePoll);
 <style scoped>
 .shell {
   max-width: 960px;
+  min-height: 100vh;
   margin: 0 auto;
   padding: 1rem 1rem 3rem;
+  display: flex;
+  flex-direction: column;
+}
+/* 登录/检查态：在剩余视口内水平垂直居中 */
+.auth-stage {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem 0 3rem;
+}
+.login-card {
+  width: 100%;
+  max-width: 360px;
+}
+.login-title {
+  margin: 0 0 0.35rem;
+  font-size: 1.25rem;
+}
+.login-desc {
+  margin: 0 0 1rem;
 }
 .top {
   display: flex;
@@ -179,6 +216,17 @@ onBeforeUnmount(stopActivePoll);
   gap: 1rem;
   margin-bottom: 0.85rem;
   flex-wrap: wrap;
+}
+.top-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 0 0 auto;
+}
+.top-actions button {
+  min-height: 36px;
+  padding: 0.35rem 0.75rem;
+  white-space: nowrap;
 }
 .tabs {
   display: flex;
@@ -208,16 +256,26 @@ onBeforeUnmount(stopActivePoll);
   text-align: center;
   box-sizing: border-box;
 }
-.login {
-  max-width: 360px;
-}
 @media (max-width: 640px) {
   .shell {
     padding: 0.75rem 0.75rem 2.5rem;
   }
+  .auth-stage {
+    padding: 0.5rem 0 2rem;
+    align-items: flex-start;
+  }
   .top {
     gap: 0.5rem;
     margin-bottom: 0.65rem;
+  }
+  .top-actions {
+    gap: 0.4rem;
+    margin-left: auto;
+  }
+  .top-actions button {
+    min-height: 32px;
+    padding: 0.25rem 0.65rem;
+    font-size: 0.85rem;
   }
   .tabs button {
     flex: 1 1 auto;
