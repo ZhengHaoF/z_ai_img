@@ -65,7 +65,11 @@ export async function submitDashScopeAsync({ target, params }) {
   if (size) body.parameters.size = size;
 
   logger.info(`POST ${url} (DashScope async)`, { model: target.upstreamModel });
-  logger.debug('DashScope 请求体', body);
+  logger.debug('DashScope 请求体摘要', {
+    promptLen: (params.prompt || '').length,
+    n: body.parameters.n,
+    size: body.parameters.size || null,
+  });
   const res = await fetchLogged(url, {
     method: 'POST',
     headers: {

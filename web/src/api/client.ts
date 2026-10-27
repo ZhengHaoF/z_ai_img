@@ -9,19 +9,29 @@ export class AuthError extends Error {
 
 async function jsonFetch<T>(
   url: string,
-  init?: RequestInit & RequestOptions,
+  init?: RequestInit & RequestOptions & { timeoutMs?: number },
 ): Promise<T> {
-  const { silent, ...rest } = init ?? {};
+  const { silent, timeoutMs = 30000, ...rest } = init ?? {};
   const quiet = silent === true;
   if (!quiet) beginRequest();
   try {
-    const res = await fetch(url, { credentials: 'same-origin', ...rest });
+    // 超时保护：网络挂死时请求会无限 pending，UI 就永远停在"加载中"
+    const res = await fetch(url, {
+      credentials: 'same-origin',
+      signal: AbortSignal.timeout(timeoutMs),
+      ...rest,
+    });
     if (res.status === 401) throw new AuthError();
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
       throw new Error((data as { error?: string }).error || `HTTP ${res.status}`);
     }
     return data as T;
+  } catch (e) {
+    if (e instanceof DOMException && e.name === 'TimeoutError') {
+      throw new Error('请求超时，请检查网络后重试');
+    }
+    throw e;
   } finally {
     if (!quiet) endRequest();
   }
@@ -171,6 +181,7 @@ export async function uploadFiles(files: File[]): Promise<string[]> {
   const data = await jsonFetch<{ files: string[] }>('/api/uploads', {
     method: 'POST',
     body: form,
+    timeoutMs: 120000,
   });
   return data.files;
 }

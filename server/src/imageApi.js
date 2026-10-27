@@ -69,7 +69,13 @@ export async function callUpstream({ target, taskType, params }) {
 async function jsonGenerate(target, body, timeout) {
   const url = joinUrl(target.baseUrl, '/v1/images/generations');
   logger.info(`POST ${url}`, { model: body.model, n: body.n, size: body.size });
-  logger.info('请求体', body);
+  // 只记摘要：请求体可能含 base64 图片（单条数百 KB），整包入日志会把 WS 快照撑爆
+  const imgs = Array.isArray(body.image) ? body.image : body.image ? [body.image] : [];
+  logger.info('请求体摘要', {
+    promptLen: (body.prompt || '').length,
+    imageCount: imgs.length,
+    imageChars: imgs.reduce((a, s) => a + (s?.length || 0), 0),
+  });
   const res = await fetchLogged(url, {
     method: 'POST',
     headers: {

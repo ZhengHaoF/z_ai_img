@@ -1,13 +1,32 @@
 const listeners = new Set();
 const buffer = [];
 const MAX_BUFFER = 500;
+/** 单条日志上限：msg 2KB、meta 序列化 2KB，超出截断（防止 base64/大对象把 WS 快照撑爆） */
+const MAX_MSG = 2048;
+const MAX_META = 2048;
+
+function clamp(str, max) {
+  return str.length > max ? `${str.slice(0, max)}…(已截断,共${str.length}字符)` : str;
+}
 
 export function log(level, msg, meta) {
+  let metaOut = meta ?? null;
+  if (metaOut != null) {
+    let s;
+    try {
+      s = JSON.stringify(metaOut);
+    } catch {
+      s = '[unserializable]';
+    }
+    if (s.length > MAX_META) {
+      metaOut = { truncated: true, preview: clamp(s, MAX_META) };
+    }
+  }
   const entry = {
     ts: Date.now(),
     level,
-    msg: String(msg),
-    meta: meta ?? null,
+    msg: clamp(String(msg), MAX_MSG),
+    meta: metaOut,
   };
   buffer.push(entry);
   if (buffer.length > MAX_BUFFER) buffer.shift();
