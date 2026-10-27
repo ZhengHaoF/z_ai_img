@@ -115,7 +115,7 @@ onMounted(load);
     <p v-if="!tasks.length && !loading" class="muted">暂无任务</p>
     <div v-for="t in tasks" :key="t.id" class="task">
       <div class="task-head">
-        <strong>{{ t.params.prompt.slice(0, 40) }}</strong>
+        <strong>{{ t.params.prompt }}</strong>
         <div class="tags">
           <span class="tag">{{ t.type === 'generate' ? '文生图' : '图编辑' }}</span>
           <span class="tag">{{ t.status }}</span>
