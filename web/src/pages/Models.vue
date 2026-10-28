@@ -34,10 +34,10 @@ const form = ref({
 });
 
 function protocolLabel(p: string) {
-  if (p === 'compatible') return '兼容扩展';
-  if (p === 'dashscope') return 'DashScope 异步';
-  if (p === 'uuapi') return 'Images 异步 (uuapi)';
-  return 'OpenAI Images';
+  if (p === 'compatible') return '同步 · 兼容扩展';
+  if (p === 'dashscope') return '异步 · 任务轮询';
+  if (p === 'uuapi') return '异步 · async/tasks';
+  return '同步 · 标准 Images';
 }
 
 async function load(opts?: { quiet?: boolean }) {
@@ -255,15 +255,15 @@ onMounted(load);
     <div class="field">
       <label>协议</label>
       <select v-model="form.protocol">
-        <option value="dashscope">DashScope 异步（千问 3.0 提交+轮询）</option>
-        <option value="uuapi">Images 异步 uuapi（/generations/async + /tasks）</option>
-        <option value="compatible">OpenAI 兼容扩展（JSON image）</option>
-        <option value="openai">标准 OpenAI Images（multipart 编辑）</option>
+        <option value="dashscope">异步任务 · 提交-轮询（input/parameters 报文）</option>
+        <option value="uuapi">异步任务 · 提交-轮询（/async + /tasks 接口）</option>
+        <option value="compatible">同步 · 兼容扩展（JSON 图传）</option>
+        <option value="openai">同步 · 标准 Images（multipart 编辑）</option>
       </select>
     </div>
     <div class="field">
       <label>上游 Base URL</label>
-      <input v-model="form.baseUrl" placeholder="https://uuapi.cc/v1" />
+      <input v-model="form.baseUrl" placeholder="https://api.example.com/v1" />
     </div>
     <div class="field">
       <label>上游模型名</label>

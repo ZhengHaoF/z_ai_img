@@ -40,7 +40,7 @@ z_ai_img/
 │   │   ├── config.js       # .env + config.json
 │   │   ├── db.js           # node:sqlite 初始化与迁移
 │   │   ├── taskRunner.js   # 任务状态机、并发控制、重启恢复
-│   │   ├── imageApi.js     # 上游适配（OpenAI Images / 兼容扩展）
+│   │   ├── imageApi.js     # 上游适配（标准 Images / 兼容扩展）
 │   │   ├── dashscopeAsync.js / uuapiAsync.js  # 异步协议适配
 │   │   ├── modelRegistry.js / modelList.js    # 模型注册与列表
 │   │   ├── logBus.js / logSocket.js           # 日志缓冲与 WS 推送
@@ -118,7 +118,7 @@ cd web && npm run dev        # Vite，端口 5173，自动代理 /api 与 /ws �
 
 ## 上游协议
 
-| 项 | OpenAI Images | OpenAI 兼容扩展 |
+| 项 | 标准 Images | 兼容扩展 |
 |----|---------------|-----------------|
 | 文生图 | `/v1/images/generations`（含 quality/format） | 同端点，无 quality/format |
 | 图编辑 | `/v1/images/edits` multipart | `/v1/images/generations` + JSON `image` |

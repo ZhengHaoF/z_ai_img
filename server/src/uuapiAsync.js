@@ -31,7 +31,7 @@ function pickError(json) {
 
 function failHttp(res, json) {
   const detail = pickError(json);
-  logger.error(`uuapi HTTP ${res.status}`, {
+  logger.error(`上游 HTTP ${res.status}`, {
     detail,
     body: JSON.stringify(json || {}).slice(0, 500),
   });

@@ -64,8 +64,8 @@ export async function submitDashScopeAsync({ target, params }) {
   const size = toDashSize(params.size);
   if (size) body.parameters.size = size;
 
-  logger.info(`POST ${url} (DashScope async)`, { model: target.upstreamModel });
-  logger.debug('DashScope 请求体摘要', {
+  logger.info(`POST ${url} (异步任务)`, { model: target.upstreamModel });
+  logger.debug('请求体摘要', {
     promptLen: (params.prompt || '').length,
     n: body.parameters.n,
     size: body.parameters.size || null,
@@ -82,14 +82,14 @@ export async function submitDashScopeAsync({ target, params }) {
   const json = await res.json().catch(() => ({}));
   if (!res.ok) {
     const detail = json?.message || json?.msg || json?.code || null;
-    logger.error(`DashScope HTTP ${res.status}`, {
+    logger.error(`上游 HTTP ${res.status}`, {
       detail,
       body: JSON.stringify(json || {}).slice(0, 500),
     });
     throw new Error(
       detail
-        ? `DashScope ${res.status}: ${detail}`
-        : `DashScope 上游错误 HTTP ${res.status} ${JSON.stringify(json).slice(0, 300)}`,
+        ? `上游 ${res.status}: ${detail}`
+        : `上游错误 HTTP ${res.status} ${JSON.stringify(json).slice(0, 300)}`,
     );
   }
   const remoteTaskId = json?.output?.task_id;
@@ -120,7 +120,7 @@ export async function queryDashScopeAsync({ target, remoteTaskId }) {
   }
   const out = json?.output || {};
   const st = String(out.task_status || 'UNKNOWN').toUpperCase();
-  logger.debug(`DashScope 响应 task_status=${st}`, {
+  logger.debug(`响应 task_status=${st}`, {
     raw: JSON.stringify(json).slice(0, 1500),
   });
 
