@@ -121,7 +121,13 @@ onBeforeUnmount(() => {
 
     <div class="grid">
       <div v-for="(img, i) in images" :key="img.fileName" class="cell">
-        <img :src="img.url" :alt="img.prompt" @click="lightboxIndex = i" />
+        <img
+          :src="img.url"
+          :alt="img.prompt"
+          loading="lazy"
+          decoding="async"
+          @click="lightboxIndex = i"
+        />
         <div class="bar">
           <span class="muted">{{ fmtTime(img.createdAt) }}</span>
           <button class="icon-del" title="删除这张图" @click="onDelete(img)">

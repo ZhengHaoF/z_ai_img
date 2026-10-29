@@ -151,6 +151,8 @@ onMounted(load);
           <img
             :src="img"
             alt=""
+            loading="lazy"
+            decoding="async"
             style="cursor: zoom-in"
             @click="openLightbox(t.images, i)"
           />
