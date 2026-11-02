@@ -126,6 +126,12 @@ export function insertResult(taskId, fileName) {
     .run(taskId, fileName, Date.now());
 }
 
+export function updateResultFileName(oldName, newName) {
+  getDb()
+    .prepare('UPDATE results SET file_name = ? WHERE file_name = ?')
+    .run(newName, oldName);
+}
+
 export function listResults(taskId) {
   return getDb()
     .prepare('SELECT file_name FROM results WHERE task_id = ? ORDER BY id')

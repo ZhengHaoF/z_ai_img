@@ -3,6 +3,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { config } from './config.js';
 import { insertResult, updateTask, listUnfinishedTaskRows } from './db.js';
+import { toWebpOrOriginal } from './imageConvert.js';
 import { callUpstream } from './imageApi.js';
 import {
   downloadUrlToBuffer,
@@ -111,7 +112,7 @@ async function run(task) {
       taskType: task.type,
       params: task.params,
     });
-    finishWithFiles(task.id, files);
+    await finishWithFiles(task.id, files);
   } catch (e) {
     if (canceled.has(task.id)) {
       cancelDone(task.id);
@@ -160,7 +161,7 @@ async function runUuapi(task, target) {
         const buffer = await downloadUuUrl(url);
         files.push({ fileName: `${crypto.randomUUID()}.png`, buffer });
       }
-      finishWithFiles(task.id, files);
+      await finishWithFiles(task.id, files);
       return;
     }
     if (q.status === 'failed') {
@@ -180,7 +181,7 @@ async function runDashScope(task, target) {
       taskType: 'edit',
       params: task.params,
     });
-    finishWithFiles(task.id, files);
+    await finishWithFiles(task.id, files);
     return;
   }
 
@@ -209,7 +210,7 @@ async function runDashScope(task, target) {
         const buffer = await downloadUrlToBuffer(url);
         files.push({ fileName: `${crypto.randomUUID()}.png`, buffer });
       }
-      finishWithFiles(task.id, files);
+      await finishWithFiles(task.id, files);
       return;
     }
     if (q.status === 'failed') {
@@ -225,15 +226,17 @@ async function runDashScope(task, target) {
   fail(task.id, '等待上游任务超时');
 }
 
-function finishWithFiles(id, files) {
+async function finishWithFiles(id, files) {
   if (canceled.has(id)) {
     cancelDone(id);
     return;
   }
   for (const f of files) {
-    const dest = path.join(config.imagesDir, f.fileName);
-    fs.writeFileSync(dest, f.buffer);
-    insertResult(id, f.fileName);
+    // 落盘前重编码 WebP（约 1/10 体积）；失败回退原图，宁可大不丢图
+    const out = await toWebpOrOriginal(f.buffer, f.fileName);
+    const dest = path.join(config.imagesDir, out.fileName);
+    fs.writeFileSync(dest, out.buffer);
+    insertResult(id, out.fileName);
   }
   updateTask(id, {
     status: 'succeeded',
